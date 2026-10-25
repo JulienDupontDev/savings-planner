@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { FileUp, X } from 'lucide-react'
-import { ACCOUNT_BUCKETS, BUCKET_LABELS } from '../../domain/accounts'
+import { ACCOUNT_BUCKETS } from '../../domain/accounts'
+import { SUPPORTED_CURRENCIES } from '../../domain/currency'
 import { currentYearMonth } from '../../domain/formatting'
 import { useStore } from '../../store'
 import type { CsvColumnMapping, CsvImportResult } from '../../api/client'
 import type { AccountBucket } from '../../domain/types'
+import { translate as t, translateAccountBucket } from '../../i18n'
 
 interface Props {
   onClose: () => void
@@ -53,6 +55,7 @@ export function ImportCsvDialog({ onClose }: Props) {
    * a lokalny useState trzyma tymczasowe drafty UI.
    */
   const accounts = useStore(s => s.accounts)
+  const defaultCurrency = useStore(s => s.settings.defaultCurrency ?? 'PLN')
   const importAccountSnapshotsCsv = useStore(s => s.importAccountSnapshotsCsv)
   const [file, setFile] = useState<File | null>(null)
   const [headers, setHeaders] = useState<string[]>([])
@@ -71,7 +74,7 @@ export function ImportCsvDialog({ onClose }: Props) {
      * od poprzedniego. React może batchować aktualizacje.
      */
     setMappings(current => {
-      const previous = current[header] ?? { action: 'skip' as const, currency: 'PLN' }
+      const previous = current[header] ?? { action: 'skip' as const, currency: defaultCurrency }
       return {
         ...current,
         [header]: { ...previous, ...patch },
@@ -94,7 +97,7 @@ export function ImportCsvDialog({ onClose }: Props) {
        */
       const firstLine = String(event.target?.result ?? '').split(/\r?\n/).find(line => line.trim())
       if (!firstLine) {
-        setError('CSV nie ma nagłówka.')
+        setError(t('accounts.importCsv.headerlessError'))
         return
       }
 
@@ -108,7 +111,7 @@ export function ImportCsvDialog({ onClose }: Props) {
               action: 'new',
               name: header,
               bucket: 'accounts' as AccountBucket,
-              currency: 'PLN',
+              currency: defaultCurrency,
             },
           ]),
         ),
@@ -132,7 +135,7 @@ export function ImportCsvDialog({ onClose }: Props) {
       const response = await importAccountSnapshotsCsv(file, { year, columns: mappings })
       setResult(response)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Import CSV nie powiódł się.')
+      setError(caught instanceof Error ? caught.message : t('accounts.importCsv.importError'))
     } finally {
       setIsImporting(false)
     }
@@ -143,14 +146,14 @@ export function ImportCsvDialog({ onClose }: Props) {
       <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 px-5 py-4">
           <div>
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Import CSV stanów kont</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Mapowanie kolumn arkusza na konta w backendzie</p>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('accounts.importCsv.title')}</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t('accounts.importCsv.description')}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-            aria-label="Zamknij"
+            aria-label={t('accounts.importCsv.close')}
           >
             <X size={16} />
           </button>
@@ -159,7 +162,7 @@ export function ImportCsvDialog({ onClose }: Props) {
         <form onSubmit={handleSubmit} className="space-y-5 p-5">
           <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Plik CSV</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('accounts.importCsv.file')}</span>
               <input
                 type="file"
                 accept=".csv,text/csv"
@@ -169,7 +172,7 @@ export function ImportCsvDialog({ onClose }: Props) {
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Rok</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('common.labels.year')}</span>
               <input
                 type="number"
                 min={2000}
@@ -184,7 +187,7 @@ export function ImportCsvDialog({ onClose }: Props) {
         {accountHeaders.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Kolumny kont
+                {t('accounts.importCsv.accountColumns')}
               </p>
               {accountHeaders.map(header => {
                 /*
@@ -195,36 +198,36 @@ export function ImportCsvDialog({ onClose }: Props) {
                  * To najbliżej [(ngModel)] albo reactive forms FormControl,
                  * tylko bez osobnej abstrakcji formularzy.
                  */
-                const mapping = mappings[header] ?? { action: 'skip' as const, currency: 'PLN' }
+                const mapping = mappings[header] ?? { action: 'skip' as const, currency: defaultCurrency }
                 return (
                   <div key={header} className="grid gap-2 rounded-lg border border-gray-100 dark:border-gray-800 p-3 md:grid-cols-[1fr_130px_1fr_160px_80px] md:items-end">
                     <div>
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{header}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Nagłówek z CSV</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{t('accounts.importCsv.csvHeader')}</p>
                     </div>
                     <label className="flex flex-col gap-1">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Akcja</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{t('accounts.importCsv.action')}</span>
                       <select
                         value={mapping.action}
                         onChange={event => updateMapping(header, { action: event.target.value as CsvColumnMapping['action'] })}
                         className="px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
                       >
-                        <option value="new">Nowe</option>
-                        <option value="existing">Istniejące</option>
-                        <option value="skip">Pomiń</option>
+                        <option value="new">{t('accounts.importCsv.new')}</option>
+                        <option value="existing">{t('accounts.importCsv.existing')}</option>
+                        <option value="skip">{t('accounts.importCsv.skip')}</option>
                       </select>
                     </label>
 
                     {mapping.action === 'existing' ? (
                       <label className="flex flex-col gap-1">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">Konto</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{t('common.labels.account')}</span>
                         <select
                           value={mapping.accountId ?? ''}
                           onChange={event => updateMapping(header, { accountId: event.target.value })}
                           className="px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
                           required
                         >
-                          <option value="">Wybierz konto</option>
+                          <option value="">{t('accounts.importCsv.chooseAccount')}</option>
                           {accounts.map(account => (
                             <option key={account.id} value={account.id}>{account.name}</option>
                           ))}
@@ -232,7 +235,7 @@ export function ImportCsvDialog({ onClose }: Props) {
                       </label>
                     ) : (
                       <label className="flex flex-col gap-1">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">Nazwa</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{t('accounts.importCsv.accountName')}</span>
                         <input
                           type="text"
                           value={mapping.name ?? header}
@@ -244,7 +247,7 @@ export function ImportCsvDialog({ onClose }: Props) {
                     )}
 
                     <label className="flex flex-col gap-1">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Bucket</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{t('accounts.importCsv.bucket')}</span>
                       <select
                         value={mapping.bucket ?? 'accounts'}
                         onChange={event => updateMapping(header, { bucket: event.target.value as AccountBucket })}
@@ -252,21 +255,23 @@ export function ImportCsvDialog({ onClose }: Props) {
                         className="px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm disabled:opacity-50"
                       >
                         {ACCOUNT_BUCKETS.map(bucket => (
-                          <option key={bucket} value={bucket}>{BUCKET_LABELS[bucket]}</option>
+                          <option key={bucket} value={bucket}>{translateAccountBucket(bucket)}</option>
                         ))}
                       </select>
                     </label>
 
                     <label className="flex flex-col gap-1">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Waluta</span>
-                      <input
-                        type="text"
-                        maxLength={3}
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{t('accounts.importCsv.currency')}</span>
+                      <select
                         value={mapping.currency ?? 'PLN'}
-                        onChange={event => updateMapping(header, { currency: event.target.value.toUpperCase() })}
-                        disabled={mapping.action === 'skip'}
-                        className="px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm uppercase disabled:opacity-50"
-                      />
+                        onChange={event => updateMapping(header, { currency: event.target.value })}
+                        disabled={mapping.action !== 'new'}
+                        className="px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm disabled:opacity-50"
+                      >
+                        {SUPPORTED_CURRENCIES.map(item => (
+                          <option key={item.code} value={item.code}>{item.code}</option>
+                        ))}
+                      </select>
                     </label>
                   </div>
                 )
@@ -282,7 +287,7 @@ export function ImportCsvDialog({ onClose }: Props) {
 
           {result && (
             <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-3 py-2 text-sm text-green-700 dark:text-green-300">
-              <p>Zaimportowano {result.snapshotsImported} snapshotów dla {result.accounts.length} kont.</p>
+              <p>{t('accounts.importCsv.success', { snapshots: result.snapshotsImported, accounts: result.accounts.length })}</p>
               {result.warnings.length > 0 && (
                 <ul className="mt-2 list-disc pl-5">
                   {result.warnings.map(warning => (
@@ -299,7 +304,7 @@ export function ImportCsvDialog({ onClose }: Props) {
               onClick={onClose}
               className="px-4 py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
             >
-              Zamknij
+              {t('accounts.importCsv.close')}
             </button>
             <button
               type="submit"
@@ -307,7 +312,7 @@ export function ImportCsvDialog({ onClose }: Props) {
               className="flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white dark:disabled:bg-gray-700 text-white text-sm font-medium rounded-md"
             >
               <FileUp size={15} />
-              {isImporting ? 'Importuję...' : 'Importuj'}
+              {isImporting ? t('accounts.importCsv.importing') : t('accounts.importCsv.import')}
             </button>
           </div>
         </form>

@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatCurrencyInput, parseCurrencyInput, sanitizeCurrencyInput } from '../../domain/currency'
+import { useDefaultCurrency } from '../../hooks/useDefaultCurrency'
 
 interface Props {
   value: number
   onChange: (val: number) => void
+  currency?: string
   label?: string
   className?: string
   placeholder?: string
 }
 
-export function CurrencyInput({ value, onChange, label, className = '', placeholder = '0,00' }: Props) {
+export function CurrencyInput({ value, onChange, currency, label, className = '', placeholder = '0,00' }: Props) {
+  const defaultCurrency = useDefaultCurrency()
+  const displayedCurrency = currency ?? defaultCurrency
   /*
    * Parent stores the domain number, while this component stores the editable
    * text. That lets the user type decimal separators naturally, then we format
-   * to Polish money notation on blur.
+  * to localized money notation on blur.
    */
   const [display, setDisplay] = useState(value === 0 ? '' : formatCurrencyInput(value))
   const focused = useRef(false)
@@ -75,7 +79,7 @@ export function CurrencyInput({ value, onChange, label, className = '', placehol
           className="w-full pr-8 pl-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right tabular-nums"
         />
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">
-          zł
+          {displayedCurrency}
         </span>
       </div>
     </div>

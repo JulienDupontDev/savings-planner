@@ -81,4 +81,14 @@ describe('useStore - subscriptions and upcoming expenses', () => {
       },
     ])
   })
+
+  it('keeps the default currency in export and import', () => {
+    useStore.getState().updateSettings({ defaultCurrency: 'EUR' })
+
+    const exported = useStore.getState().exportData()
+    useStore.getState().resetAll()
+    useStore.getState().importData(exported)
+
+    expect(useStore.getState().settings.defaultCurrency).toBe('EUR')
+  })
 })

@@ -377,9 +377,13 @@ export interface Settings {
   monthlyExpenses: number
   startMonth: string // "YYYY-MM" format
   horizonMonths: number
+  defaultCurrency?: string
   emergencyFundBuckets: AccountBucket[]
   safetyCushionMonths?: number  // cel poduszki = tyle miesięcy kosztów (domyślnie 6)
+  emergencyFundEnabled?: boolean // false => brak osobnego funduszu awaryjnego, tylko poduszka (domyślnie true)
   emergencyFundTarget?: number  // cel funduszu awaryjnego — stała kwota (domyślnie 10000)
+  securityStarterMonths?: number // months of costs funded 100% into security first (default 1)
+  securityMaxSharePct?: number // share of remaining cash going to security after the starter buffer (default 60)
   ikzePlans?: IkzePlanEntry[]
   includeIkzeContributionsInCashflow?: boolean
   creditCard?: CreditCard // tracker karty kredytowej; brak => karta nieskonfigurowana

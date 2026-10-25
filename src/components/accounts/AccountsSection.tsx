@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { CalendarPlus, Eye, EyeOff, FileUp, Lock, Pencil, Plus, Trash2, Unlock } from 'lucide-react'
-import { ACCOUNT_BUCKETS, allSnapshotMonths, balanceAsOf, BUCKET_LABELS } from '../../domain/accounts'
-import { addMonths, currentYearMonth, formatPLN } from '../../domain/formatting'
+import { ACCOUNT_BUCKETS, allSnapshotMonths, balanceAsOf } from '../../domain/accounts'
+import { addMonths, currentYearMonth, formatCurrency } from '../../domain/formatting'
 import { buildSchedule } from '../../domain/allocation'
 import { committedMonthlyCostBasis } from '../../domain/securityBuffers'
 import { useStore } from '../../store'
@@ -12,11 +12,13 @@ import { AssetsKpi } from './AssetsKpi'
 import { AssetsPie } from './AssetsPie'
 import { ImportCsvDialog } from './ImportCsvDialog'
 import { NetWorthChart } from './NetWorthChart'
+import { translate as t, translateAccountBucket } from '../../i18n'
 
 export function AccountsSection() {
   const accounts = useStore(s => s.accounts)
   const snapshots = useStore(s => s.accountSnapshots)
   const emergencyFundBuckets = useStore(s => s.settings.emergencyFundBuckets ?? ['safety_cushion'])
+  const defaultCurrency = useStore(s => s.settings.defaultCurrency ?? 'PLN')
   const loans = useStore(s => s.loans)
   const mortgagePlan = useStore(s => s.mortgagePlan)
   const addAccount = useStore(s => s.addAccount)
@@ -86,20 +88,22 @@ export function AccountsSection() {
         safetyCushionTarget={safetyCushionTarget}
         safetyCushionMonths={safetyCushionMonths}
         emergencyFundTarget={emergencyFundTarget}
+        emergencyFundEnabled={settings.emergencyFundEnabled !== false}
       />
 
       <EmergencyFundBucketsPanel
         accounts={accounts}
         snapshots={snapshots}
         selectedBuckets={emergencyFundBuckets}
+        defaultCurrency={defaultCurrency}
         onChange={buckets => updateSettings({ emergencyFundBuckets: buckets })}
       />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.55fr)]">
         <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
           <div className="mb-4">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Historia net worth</h2>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Pełna oś snapshotów kont z bieżącym długiem jako korektą netto.</p>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('app.assets.accountHistory')}</h2>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{t('app.assets.accountHistoryDescription')}</p>
           </div>
           <NetWorthChart accounts={accounts} snapshots={snapshots} loans={loans} mortgagePlan={mortgagePlan} />
         </div>
@@ -109,8 +113,9 @@ export function AccountsSection() {
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
         {adding ? (
           <div className="w-full rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
-            <p className="mb-3 text-sm font-medium text-gray-900 dark:text-gray-100">Nowe konto</p>
+            <p className="mb-3 text-sm font-medium text-gray-900 dark:text-gray-100">{t('accounts.section.newAccount')}</p>
             <AccountForm
+              defaultCurrency={defaultCurrency}
               onSave={data => { addAccount(data); setAdding(false) }}
               onCancel={() => setAdding(false)}
             />
@@ -121,7 +126,7 @@ export function AccountsSection() {
             className="flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
           >
             <Plus size={15} />
-            Dodaj konto
+            {t('accounts.section.addAccount')}
           </button>
         )}
 
@@ -130,7 +135,7 @@ export function AccountsSection() {
           className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
         >
           {showClosed ? <EyeOff size={15} /> : <Eye size={15} />}
-          {showClosed ? 'Ukryj zamknięte' : 'Pokaż zamknięte'}
+          {showClosed ? t('accounts.section.hideClosed') : t('accounts.section.showClosed')}
         </button>
 
         <button
@@ -138,7 +143,7 @@ export function AccountsSection() {
           className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
         >
           <FileUp size={15} />
-          Import CSV
+          {t('accounts.section.importCsv')}
         </button>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -153,13 +158,13 @@ export function AccountsSection() {
             className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
           >
             <CalendarPlus size={15} />
-            Dodaj miesiąc
+            {t('accounts.section.addMonth')}
           </button>
           <button
             onClick={addNextMonth}
             className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
           >
-            Kolejny
+            {t('accounts.section.nextMonth')}
           </button>
         </div>
       </div>
@@ -169,7 +174,7 @@ export function AccountsSection() {
           {visibleAccounts.map(account => (
             editingId === account.id ? (
               <div key={account.id} className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
-                <p className="mb-3 text-sm font-medium text-gray-900 dark:text-gray-100">Edytuj konto</p>
+                <p className="mb-3 text-sm font-medium text-gray-900 dark:text-gray-100">{t('accounts.section.editAccount')}</p>
                 <AccountForm
                   initial={account}
                   onSave={data => { updateAccount(account.id, data); setEditingId(null) }}
@@ -183,7 +188,7 @@ export function AccountsSection() {
                 latestMonth={months[0] ?? currentYearMonth()}
                 onEdit={() => setEditingId(account.id)}
                 onRemove={() => {
-                  if (window.confirm(`Usunąć konto „${account.name}"? Skasuje też wszystkie jego snapshoty. Tej operacji nie można cofnąć.`)) {
+                  if (window.confirm(t('accounts.section.deleteConfirmation', { name: account.name }))) {
                     removeAccount(account.id)
                   }
                 }}
@@ -197,8 +202,8 @@ export function AccountsSection() {
 
       <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Snapshoty kont</h2>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Tabela jest tylko w domenie Majątek; cashflow mieszka w zakładce Plan.</p>
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('accounts.section.snapshotsTitle')}</h2>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{t('app.assets.tableDescription')}</p>
         </div>
         <AccountsTable
           accounts={visibleAccounts}
@@ -218,11 +223,13 @@ function EmergencyFundBucketsPanel({
   accounts,
   snapshots,
   selectedBuckets,
+  defaultCurrency,
   onChange,
 }: {
   accounts: Account[]
   snapshots: AccountSnapshot[]
   selectedBuckets: AccountBucket[]
+  defaultCurrency: string
   onChange: (buckets: AccountBucket[]) => void
 }) {
   const latestMonth = allSnapshotMonths(snapshots).at(-1)
@@ -245,14 +252,14 @@ function EmergencyFundBucketsPanel({
     <div className="rounded-md border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Poduszka bezpieczeństwa</h2>
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('accounts.section.safetyCushionTitle')}</h2>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-            Wybierz buckety, które sumują się do poduszki (docelowo ~6 miesięcy kosztów rodziny). Fundusz awaryjny liczy się osobno z bucketu „Fundusz awaryjny".
+            {t('accounts.section.safetyCushionDescription')}
           </p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-gray-500 dark:text-gray-400">{latestMonth ?? 'Brak snapshotów'}</p>
-          <p className="text-xl font-semibold tabular-nums text-gray-900 dark:text-gray-100">{formatPLN(total)}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{latestMonth ?? t('accounts.section.noSnapshots')}</p>
+          <p className="text-xl font-semibold tabular-nums text-gray-900 dark:text-gray-100">{formatCurrency(total, defaultCurrency)}</p>
         </div>
       </div>
 
@@ -281,8 +288,8 @@ function EmergencyFundBucketsPanel({
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
               />
               <span className="min-w-0">
-                <span className="block font-medium">{BUCKET_LABELS[bucket]}</span>
-                <span className="block text-xs tabular-nums text-gray-500 dark:text-gray-400">{formatPLN(bucketTotal)}</span>
+                <span className="block font-medium">{translateAccountBucket(bucket)}</span>
+                <span className="block text-xs tabular-nums text-gray-500 dark:text-gray-400">{formatCurrency(bucketTotal, defaultCurrency)}</span>
               </span>
             </label>
           )
@@ -315,13 +322,13 @@ function AccountRow({
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{account.name}</p>
           {account.closedAt && (
-            <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400">zamknięte</span>
+            <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400">{t('accounts.section.closed')}</span>
           )}
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          {BUCKET_LABELS[account.bucket]} · {account.currency}
-          {account.openedAt ? ` · od ${account.openedAt}` : ''}
-          {account.closedAt ? ` · do ${account.closedAt}` : ''}
+          {translateAccountBucket(account.bucket)} · {account.currency}
+          {account.openedAt ? ` ${t('accounts.section.openedAt', { date: account.openedAt })}` : ''}
+          {account.closedAt ? ` ${t('accounts.section.closedAt', { date: account.closedAt })}` : ''}
         </p>
       </div>
 
@@ -331,7 +338,7 @@ function AccountRow({
           value={closeMonth}
           onChange={e => setCloseMonth(e.target.value)}
           className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-          aria-label="Miesiąc zamknięcia"
+          aria-label={t('accounts.section.closeMonth')}
         />
       )}
 
@@ -340,8 +347,8 @@ function AccountRow({
           <button
             onClick={onReopen}
             className="rounded p-1.5 text-gray-400 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-950/30"
-            aria-label="Otwórz konto"
-            title="Otwórz konto"
+            aria-label={t('accounts.section.reopen')}
+            title={t('accounts.section.reopen')}
           >
             <Unlock size={14} />
           </button>
@@ -349,8 +356,8 @@ function AccountRow({
           <button
             onClick={() => onClose(closeMonth)}
             className="rounded p-1.5 text-gray-400 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-950/30"
-            aria-label="Zamknij konto"
-            title="Zamknij konto"
+            aria-label={t('accounts.section.close')}
+            title={t('accounts.section.close')}
           >
             <Lock size={14} />
           </button>
@@ -358,16 +365,16 @@ function AccountRow({
         <button
           onClick={onEdit}
           className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-          aria-label="Edytuj konto"
-          title="Edytuj konto"
+          aria-label={t('accounts.section.editAccount')}
+          title={t('accounts.section.editAccount')}
         >
           <Pencil size={14} />
         </button>
         <button
           onClick={onRemove}
           className="rounded p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
-          aria-label="Usuń konto"
-          title="Usuń konto"
+          aria-label={t('accounts.section.delete')}
+          title={t('accounts.section.delete')}
         >
           <Trash2 size={14} />
         </button>

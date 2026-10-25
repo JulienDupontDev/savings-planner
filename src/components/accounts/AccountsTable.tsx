@@ -1,9 +1,11 @@
 import { memo, useMemo } from 'react'
 import { Trash2 } from 'lucide-react'
 import { balanceAsOf, isActiveInMonth, totalAssetsAsOf } from '../../domain/accounts'
-import { formatPLN, formatYearMonth } from '../../domain/formatting'
+import { formatCurrency, formatYearMonth } from '../../domain/formatting'
 import type { Account, AccountSnapshot } from '../../domain/types'
+import { useDefaultCurrency } from '../../hooks/useDefaultCurrency'
 import { CurrencyInput } from '../ui/CurrencyInput'
+import { translate as t } from '../../i18n'
 
 interface Props {
   accounts: Account[]
@@ -14,6 +16,7 @@ interface Props {
 }
 
 export function AccountsTable({ accounts, snapshots, months, onSetSnapshot, onRemoveSnapshot }: Props) {
+  const defaultCurrency = useDefaultCurrency()
   const snapshotsByCell = useMemo(() => {
     const map = new Map<string, AccountSnapshot>()
     snapshots.forEach(snapshot => {
@@ -37,7 +40,7 @@ export function AccountsTable({ accounts, snapshots, months, onSetSnapshot, onRe
   if (accounts.length === 0) {
     return (
       <div className="px-4 py-8 text-center border border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-500 dark:text-gray-400">
-        Dodaj pierwsze konto, a tabela stanów pojawi się tutaj.
+        {t('accounts.table.emptyNoAccounts')}
       </div>
     )
   }
@@ -45,7 +48,7 @@ export function AccountsTable({ accounts, snapshots, months, onSetSnapshot, onRe
   if (months.length === 0) {
     return (
       <div className="px-4 py-8 text-center border border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-500 dark:text-gray-400">
-        Dodaj miesiąc i wpisz pierwsze saldo, żeby rozpocząć historię.
+        {t('accounts.table.emptyNoMonths')}
       </div>
     )
   }
@@ -56,7 +59,7 @@ export function AccountsTable({ accounts, snapshots, months, onSetSnapshot, onRe
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
             <th className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-800 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 min-w-36">
-              Miesiąc
+              {t('accounts.table.month')}
             </th>
             {accounts.map(account => (
               <th key={account.id} className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 min-w-48">
@@ -65,7 +68,7 @@ export function AccountsTable({ accounts, snapshots, months, onSetSnapshot, onRe
               </th>
             ))}
             <th className="sticky right-0 z-10 bg-gray-50 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-800 dark:text-gray-400 min-w-36">
-              Suma majątku
+              {t('accounts.table.totalAssets')}
             </th>
           </tr>
         </thead>
@@ -81,6 +84,7 @@ export function AccountsTable({ accounts, snapshots, months, onSetSnapshot, onRe
               delta={monthTotals.get(yearMonth)?.delta}
               onSetSnapshot={onSetSnapshot}
               onRemoveSnapshot={onRemoveSnapshot}
+              defaultCurrency={defaultCurrency}
             />
           ))}
         </tbody>
@@ -94,6 +98,7 @@ interface RowProps extends Omit<Props, 'months'> {
   snapshotsByCell: Map<string, AccountSnapshot>
   total: number
   delta?: number
+  defaultCurrency: string
 }
 
 const AccountsTableRow = memo(function AccountsTableRow({
@@ -103,6 +108,7 @@ const AccountsTableRow = memo(function AccountsTableRow({
   snapshotsByCell,
   total,
   delta,
+  defaultCurrency,
   onSetSnapshot,
   onRemoveSnapshot,
 }: RowProps) {
@@ -120,7 +126,7 @@ const AccountsTableRow = memo(function AccountsTableRow({
         if (!active) {
           return (
             <td key={account.id} className="px-3 py-3 text-xs text-gray-300 dark:text-gray-700">
-              poza zakresem
+              {t('accounts.table.outsidePeriod')}
             </td>
           )
         }
@@ -130,6 +136,7 @@ const AccountsTableRow = memo(function AccountsTableRow({
             <div className="flex items-start gap-2">
               <CurrencyInput
                 value={snapshot?.balance ?? 0}
+                currency={account.currency}
                 onChange={value => onSetSnapshot(account.id, yearMonth, value)}
                 placeholder={snapshot ? '0' : '—'}
                 className="min-w-32"
@@ -138,24 +145,24 @@ const AccountsTableRow = memo(function AccountsTableRow({
                 <button
                   onClick={() => onRemoveSnapshot(account.id, yearMonth)}
                   className="mt-1.5 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                  aria-label="Usuń snapshot"
-                  title="Usuń snapshot"
+                  aria-label={t('accounts.table.deleteSnapshot')}
+                  title={t('accounts.table.deleteSnapshot')}
                 >
                   <Trash2 size={13} />
                 </button>
               )}
             </div>
             {!snapshot && carryForward > 0 && (
-              <p className="mt-1 text-xs text-gray-400">carry-forward: {formatPLN(carryForward)}</p>
+              <p className="mt-1 text-xs text-gray-400">{t('accounts.table.carryForward')}: {formatCurrency(carryForward, account.currency)}</p>
             )}
           </td>
         )
       })}
       <td className="sticky right-0 z-10 bg-white px-3 py-3 text-right align-top whitespace-nowrap dark:bg-gray-900">
-        <span className="block font-display text-base font-semibold tnum text-teal-700 dark:text-teal-300">{formatPLN(total)}</span>
+        <span className="block font-display text-base font-semibold tnum text-teal-700 dark:text-teal-300">{formatCurrency(total, defaultCurrency)}</span>
         {delta !== undefined && delta !== 0 && (
           <span className={`mt-0.5 block text-xs tnum ${delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-            {delta > 0 ? '+' : '−'}{formatPLN(Math.abs(delta))} m/m
+            {delta > 0 ? '+' : '−'}{formatCurrency(Math.abs(delta), defaultCurrency)} · {t('accounts.table.monthOverMonth')}
           </span>
         )}
       </td>

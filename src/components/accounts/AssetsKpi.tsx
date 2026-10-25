@@ -1,7 +1,9 @@
 import { TrendingDown, TrendingUp, WalletCards } from 'lucide-react'
-import { allSnapshotMonths, balanceAsOf, BUCKET_LABELS, totalAssetsAsOf } from '../../domain/accounts'
-import { formatPLN, formatYearMonth } from '../../domain/formatting'
+import { allSnapshotMonths, balanceAsOf, totalAssetsAsOf } from '../../domain/accounts'
+import { formatCurrency, formatYearMonth } from '../../domain/formatting'
 import type { Account, AccountBucket, AccountSnapshot } from '../../domain/types'
+import { useDefaultCurrency } from '../../hooks/useDefaultCurrency'
+import { translate as t, translateAccountBucket } from '../../i18n'
 
 interface Props {
   accounts: Account[]
@@ -10,19 +12,23 @@ interface Props {
   safetyCushionTarget: number
   safetyCushionMonths: number
   emergencyFundTarget: number
+  emergencyFundEnabled: boolean
 }
 
-export function AssetsKpi({ accounts, snapshots, emergencyFundBuckets, safetyCushionTarget, safetyCushionMonths, emergencyFundTarget }: Props) {
+export function AssetsKpi({ accounts, snapshots, emergencyFundBuckets, safetyCushionTarget, safetyCushionMonths, emergencyFundTarget, emergencyFundEnabled }: Props) {
+  const currency = useDefaultCurrency()
   const months = allSnapshotMonths(snapshots)
   const latestMonth = months.at(-1)
   const previousMonth = months.at(-2)
 
+  const gridClass = `grid gap-3 ${emergencyFundEnabled ? 'md:grid-cols-3' : 'md:grid-cols-2'}`
+
   if (!latestMonth) {
     return (
-      <div className="grid gap-3 md:grid-cols-3">
-        <EmptyKpi title="Suma majątku" />
-        <EmptyKpi title="Poduszka bezpieczeństwa" />
-        <EmptyKpi title="Fundusz awaryjny" />
+      <div className={gridClass}>
+        <EmptyKpi title={t('accounts.kpi.totalAssets')} currency={currency} />
+        <EmptyKpi title={t('accounts.kpi.safetyCushion')} currency={currency} />
+        {emergencyFundEnabled && <EmptyKpi title={t('accounts.kpi.emergencyFund')} currency={currency} />}
       </div>
     )
   }
@@ -36,22 +42,24 @@ export function AssetsKpi({ accounts, snapshots, emergencyFundBuckets, safetyCus
   const emergencyFund = sumBuckets(accounts, snapshots, latestMonth, ['emergency_fund'])
 
   return (
-    <div className="grid gap-3 md:grid-cols-3">
-      <KpiCard title="Suma majątku" value={formatPLN(totalAssets)} subtitle={formatYearMonth(latestMonth)} delta={totalDelta} />
+    <div className={gridClass}>
+      <KpiCard title={t('accounts.kpi.totalAssets')} value={formatCurrency(totalAssets, currency)} subtitle={formatYearMonth(latestMonth)} delta={totalDelta} currency={currency} />
       <KpiCard
-        title="Poduszka bezpieczeństwa"
-        value={formatPLN(safetyCushion)}
-        subtitle={`${formatBucketSubtitle(emergencyFundBuckets)} · cel ${safetyCushionMonths} mies.`}
+        title={t('accounts.kpi.safetyCushion')}
+        value={formatCurrency(safetyCushion, currency)}
+        subtitle={`${formatBucketSubtitle(emergencyFundBuckets)} · ${t('accounts.kpi.targetMonths', { months: safetyCushionMonths })}`}
         current={safetyCushion}
         target={safetyCushionTarget}
+        currency={currency}
       />
-      <KpiCard
-        title="Fundusz awaryjny"
-        value={formatPLN(emergencyFund)}
-        subtitle="Bucket: Fundusz awaryjny"
+      {emergencyFundEnabled && <KpiCard
+        title={t('accounts.kpi.emergencyFund')}
+        value={formatCurrency(emergencyFund, currency)}
+        subtitle={t('accounts.kpi.emergencyBucket')}
         current={emergencyFund}
         target={emergencyFundTarget}
-      />
+        currency={currency}
+      />}
     </div>
   )
 }
@@ -63,15 +71,15 @@ function sumBuckets(accounts: Account[], snapshots: AccountSnapshot[], yearMonth
 }
 
 function formatBucketSubtitle(buckets: AccountBucket[]): string {
-  if (buckets.length === 0) return 'Brak bucketów'
-  return buckets.map(bucket => BUCKET_LABELS[bucket]).join(' + ')
+  if (buckets.length === 0) return t('common.empty.noBuckets')
+  return buckets.map(translateAccountBucket).join(' + ')
 }
 
-function EmptyKpi({ title }: { title: string }) {
-  return <KpiCard title={title} value="-" subtitle="Brak snapshotów" />
+function EmptyKpi({ title, currency }: { title: string; currency: string }) {
+  return <KpiCard title={title} value="-" subtitle={t('accounts.kpi.noSnapshots')} currency={currency} />
 }
 
-function KpiCard({ title, value, subtitle, delta, current, target }: { title: string; value: string; subtitle: string; delta?: number; current?: number; target?: number }) {
+function KpiCard({ title, value, subtitle, delta, current, target, currency }: { title: string; value: string; subtitle: string; delta?: number; current?: number; target?: number; currency: string }) {
   const DeltaIcon = (delta ?? 0) >= 0 ? TrendingUp : TrendingDown
   const hasProgress = target !== undefined && target > 0 && current !== undefined
   const pct = hasProgress ? Math.min(100, Math.round((current / target) * 100)) : 0
@@ -92,7 +100,7 @@ function KpiCard({ title, value, subtitle, delta, current, target }: { title: st
       {delta !== undefined && (
         <p className={`mt-3 flex items-center gap-1 text-xs font-medium ${delta >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
           <DeltaIcon size={13} />
-          {delta >= 0 ? '+' : ''}{formatPLN(delta)} m/m
+          {delta >= 0 ? '+' : ''}{formatCurrency(delta, currency)} · {t('common.labels.monthOverMonth')}
         </p>
       )}
       {hasProgress && (
@@ -104,7 +112,7 @@ function KpiCard({ title, value, subtitle, delta, current, target }: { title: st
             />
           </div>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-            {reached ? '✓ cel osiągnięty' : `${pct}% celu`} · {formatPLN(target)}
+            {reached ? t('accounts.kpi.targetReached') : t('accounts.kpi.targetProgress', { percent: pct })} · {formatCurrency(target, currency)}
           </p>
         </div>
       )}

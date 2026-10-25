@@ -1,5 +1,6 @@
 import { buildSchedule } from './allocation'
 import { creditCardStatus } from './creditCard'
+import { translate as t } from '../i18n'
 import type {
   Goal,
   Loan,
@@ -63,20 +64,20 @@ export function buildNextCycleForecast(
   const creditCardPayment = cardStatus?.used ?? 0
   const debtTotal = targetRow.loanPaymentsTotal + targetRow.mortgagePaymentTotal
   const lines: NextCycleForecastLine[] = [
-    { key: 'living', label: 'Koszty życia', amount: targetRow.expenses },
-    { key: 'subscriptions', label: 'Abonamenty', amount: targetRow.subscriptionsTotal },
-    { key: 'oneTime', label: 'Jednorazowe', amount: targetRow.oneTimeExpensesTotal },
-    { key: 'debt', label: 'Raty i hipoteka', amount: debtTotal },
-    { key: 'ikze', label: 'IKZE', amount: targetRow.ikzeContributionTotal },
+    { key: 'living', label: t('forecast.livingCosts'), amount: targetRow.expenses },
+    { key: 'subscriptions', label: t('forecast.subscriptions'), amount: targetRow.subscriptionsTotal },
+    { key: 'oneTime', label: t('forecast.oneTime'), amount: targetRow.oneTimeExpensesTotal },
+    { key: 'debt', label: t('forecast.debts'), amount: debtTotal },
+    { key: 'ikze', label: t('forecast.ikze'), amount: targetRow.ikzeContributionTotal },
     {
       key: 'creditCard',
-      label: 'Spłata karty',
+      label: t('forecast.cardRepayment'),
       amount: creditCardPayment,
       detail: settings.creditCard?.repaymentDayOfMonth
-        ? `${settings.creditCard.repaymentDayOfMonth}. dzień miesiąca`
+        ? t('forecast.repaymentDay', { day: settings.creditCard.repaymentDayOfMonth })
         : settings.creditCard
-          ? 'dzień spłaty nieustawiony'
-          : 'brak skonfigurowanej karty',
+          ? t('forecast.repaymentDayMissing')
+          : t('forecast.cardMissing'),
     },
   ]
   const totalRequired = lines.reduce((sum, line) => sum + line.amount, 0)

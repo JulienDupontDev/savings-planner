@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { currentYearMonth } from '../../domain/formatting'
 import type { UpcomingExpense } from '../../domain/types'
 import { CurrencyInput } from '../ui/CurrencyInput'
+import { translate as t } from '../../i18n'
 
 interface Props {
   initial?: UpcomingExpense
@@ -21,27 +22,27 @@ export function UpcomingExpenseForm({ initial, onSave, onCancel }: Props) {
     <div className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-700">
       <div>
         <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-          Nazwa wydatku
+          {t('expenses.form.name')}
         </label>
         <input
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="np. OC auta"
+          placeholder={t('expenses.form.namePlaceholder')}
           className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
         <CurrencyInput
-          label="Kwota"
+          label={t('common.labels.amount')}
           value={amount}
           onChange={setAmount}
           className="sm:col-span-1"
         />
         <div>
           <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-            Miesiąc
+            {t('common.labels.month')}
           </label>
           <input
             type="month"
@@ -57,7 +58,7 @@ export function UpcomingExpenseForm({ initial, onSave, onCancel }: Props) {
             onChange={e => setIsPaid(e.target.checked)}
             className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
-          Opłacone
+          {t('expenses.form.paid')}
         </label>
       </div>
 
@@ -66,14 +67,14 @@ export function UpcomingExpenseForm({ initial, onSave, onCancel }: Props) {
           onClick={onCancel}
           className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
         >
-          Anuluj
+          {t('common.actions.cancel')}
         </button>
         <button
           onClick={() => valid && onSave({ name: name.trim(), amount, targetMonth, isPaid })}
           disabled={!valid}
           className="text-xs px-3 py-1.5 rounded-md bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
         >
-          {initial ? 'Zapisz' : 'Dodaj wydatek'}
+          {initial ? t('common.actions.save') : t('expenses.form.add')}
         </button>
       </div>
     </div>

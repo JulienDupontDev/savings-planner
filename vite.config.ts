@@ -35,5 +35,10 @@ export default defineConfig({
      * globals: true pozwala pisać describe/it/expect bez importowania ich w każdym teście.
      */
     globals: true,
+    // Keep tests off the real backend even when .env.local sets VITE_BACKEND=api.
+    env: {
+      VITE_BACKEND: 'local',
+      VITE_API_BASE_URL: 'http://127.0.0.1:1',
+    },
   },
 })

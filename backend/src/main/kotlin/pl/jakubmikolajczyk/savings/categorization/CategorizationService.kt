@@ -35,6 +35,7 @@ class CategorizationService(
     fun updateCategory(id: Long, dto: CategoryDto): CategoryDto =
         repository.updateCategory(id, dto) ?: throw NotFoundException("Category $id not found")
 
+    @Transactional
     fun deleteCategory(id: Long) {
         if (repository.deleteCategory(id) == 0) throw NotFoundException("Category $id not found")
     }

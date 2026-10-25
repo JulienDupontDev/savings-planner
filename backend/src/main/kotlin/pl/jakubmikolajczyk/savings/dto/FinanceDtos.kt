@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
+import jakarta.validation.constraints.Digits
 import java.math.BigDecimal
 import java.util.UUID
 
@@ -237,11 +238,17 @@ data class SettingsDto(
     @field:NotNull val monthlyExpenses: BigDecimal,
     @field:NotBlank val startMonth: String,
     @field:Min(1) val horizonMonths: Int,
+    @field:NotBlank val defaultCurrency: String = "PLN",
     @field:NotEmpty val emergencyFundBuckets: List<AccountBucket>,
     // Cel poduszki = tyle miesięcy kosztów; cel funduszu = stała kwota docelowa.
     // Defaulty pozwalają zdeserializować stare ustawienia bez tych pól.
     @field:Min(1) val safetyCushionMonths: Int = 6,
     @field:NotNull val emergencyFundTarget: BigDecimal = BigDecimal("10000"),
+    // false => użytkownik nie chce osobnego funduszu awaryjnego (tylko poduszka). JSONB blob, brak migracji.
+    val emergencyFundEnabled: Boolean = true,
+    // Podział wypłaty; null => domyślne wartości po stronie frontu. JSONB blob, brak migracji.
+    @field:Min(0) @field:Max(12) val securityStarterMonths: Int? = null,
+    @field:Min(0) @field:Max(100) val securityMaxSharePct: Int? = null,
     @field:Valid val ikzePlans: List<IkzePlanEntryDto> = emptyList(),
     val includeIkzeContributionsInCashflow: Boolean = false,
     // Tracker karty kredytowej; null => karta nieskonfigurowana. JSONB blob, brak migracji.
@@ -340,6 +347,15 @@ data class TransactionDto(
     @field:NotBlank val source: String,
     val categoryId: Long? = null,
     val categoryLocked: Boolean = false,
+)
+
+data class ManualTransactionCreateDto(
+    @field:NotNull val accountId: UUID,
+    @field:NotBlank val bookedAt: String,
+    @field:NotNull @field:Digits(integer = 12, fraction = 2) val amount: BigDecimal,
+    @field:NotBlank val description: String,
+    val counterparty: String? = null,
+    val categoryId: Long? = null,
 )
 
 data class TransactionCategoryOverrideDto(

@@ -57,5 +57,5 @@ function categoryLabel(transaction: BankTransaction, categoryById: Map<number, s
 }
 
 function compareText(left: string, right: string) {
-  return left.localeCompare(right, 'pl', { sensitivity: 'base', numeric: true })
+  return left.localeCompare(right, 'fr', { sensitivity: 'base', numeric: true })
 }

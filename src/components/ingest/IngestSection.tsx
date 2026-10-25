@@ -4,6 +4,7 @@ import { FileUp, Upload } from 'lucide-react'
 import { IS_API_MODE } from '../../config'
 import type { Account, BankSource, IngestResult } from '../../domain/types'
 import { useStore } from '../../store'
+import { translate as t } from '../../i18n'
 
 const BANK_LABELS: Record<BankSource, string> = {
   ALIOR_CSV: 'Alior CSV',
@@ -49,7 +50,7 @@ export function IngestSection() {
   if (!IS_API_MODE) {
     return (
       <div className="rounded-md border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
-        Import wyciągu bankowego jest dostępny w trybie API.
+        {t('ingest.apiOnly')}
       </div>
     )
   }
@@ -58,7 +59,7 @@ export function IngestSection() {
     <form onSubmit={submit} className="space-y-4">
       <div className="grid gap-3 md:grid-cols-[12rem_minmax(14rem,1fr)_minmax(16rem,1fr)_auto] md:items-end">
         <label className="block text-sm">
-          <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Bank</span>
+          <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{t('ingest.bank')}</span>
           <select
             value={bank}
             onChange={event => setBank(event.target.value as BankSource)}
@@ -69,7 +70,7 @@ export function IngestSection() {
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Konto</span>
+          <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{t('ingest.account')}</span>
           <select
             value={selectedAccountId}
             onChange={event => setAccountId(event.target.value)}
@@ -79,13 +80,13 @@ export function IngestSection() {
             {eligibleAccounts.length > 0 ? (
               eligibleAccounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)
             ) : (
-              <option value="">Brak konta dla importera {BANK_LABELS[bank]}</option>
+              <option value="">{t('ingest.noCompatibleAccount', { bank: BANK_LABELS[bank] })}</option>
             )}
           </select>
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Plik</span>
+          <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{t('ingest.file')}</span>
           <input
             type="file"
             accept=".csv,.pdf,text/csv,application/pdf"
@@ -100,26 +101,25 @@ export function IngestSection() {
           className="inline-flex items-center justify-center gap-2 rounded-md bg-gray-950 px-3 py-2 text-sm text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
         >
           {isUploading ? <Upload size={16} className="animate-spin" /> : <FileUp size={16} />}
-          Importuj
+          {t('ingest.import')}
         </button>
       </div>
 
       {accounts.length === 0 && (
         <p className="rounded-md border border-dashed border-gray-200 px-3 py-3 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
-          Najpierw dodaj konto w zakładce Majątek, bo import musi wiedzieć, do którego rachunku przypisać transakcje.
+          {t('ingest.addAccountFirst')}
         </p>
       )}
 
       {accounts.length > 0 && eligibleAccounts.length === 0 && (
         <p className="rounded-md border border-dashed border-gray-200 px-3 py-3 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
-          Ten importer obsługuje tylko konto o nazwie pasującej do banku: Alior dla CSV albo Velo dla PDF.
+          {t('ingest.matchingAccountRequired')}
         </p>
       )}
 
       {result && (
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          Zaimportowano <span className="font-medium text-gray-900 dark:text-gray-100">{result.inserted}</span>,
-          pominięto duplikaty <span className="font-medium text-gray-900 dark:text-gray-100">{result.skipped}</span>.
+          {t('ingest.result', { inserted: result.inserted, skipped: result.skipped })}
         </p>
       )}
 

@@ -70,13 +70,24 @@ class PayPeriodRepository(private val jdbc: NamedParameterJdbcTemplate) {
                     select
                         tx.account_id,
                         account.name as account_name,
-                        lower(regexp_replace(trim(tx.counterparty), '[[:space:]]+', ' ', 'g')) as counterparty,
+                        lower(regexp_replace(
+                            trim(case
+                                when tx.source = 'manual'
+                                    then coalesce(nullif(trim(tx.counterparty), ''), tx.description)
+                                else tx.counterparty
+                            end),
+                            '[[:space:]]+', ' ', 'g'
+                        )) as counterparty,
                         tx.booked_at,
                         tx.amount
                     from finance.transactions tx
                     join finance.accounts account on account.id = tx.account_id
                     where tx.amount > 0
-                      and nullif(trim(coalesce(tx.counterparty, '')), '') is not null
+                      and nullif(trim(case
+                          when tx.source = 'manual'
+                              then coalesce(nullif(trim(tx.counterparty), ''), tx.description)
+                          else tx.counterparty
+                      end), '') is not null
                 )
                 select
                     normalized.account_id,
@@ -154,7 +165,14 @@ class PayPeriodRepository(private val jdbc: NamedParameterJdbcTemplate) {
                 from finance.transactions tx
                 join finance.income_anchors anchor
                   on anchor.account_id = tx.account_id
-                 and anchor.counterparty = lower(regexp_replace(trim(tx.counterparty), '[[:space:]]+', ' ', 'g'))
+                 and anchor.counterparty = lower(regexp_replace(
+                     trim(case
+                         when tx.source = 'manual'
+                             then coalesce(nullif(trim(tx.counterparty), ''), tx.description)
+                         else tx.counterparty
+                     end),
+                     '[[:space:]]+', ' ', 'g'
+                 ))
                 where tx.amount > 0
                 order by tx.account_id, tx.booked_at, tx.id
             """.trimIndent(),

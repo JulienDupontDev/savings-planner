@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { CheckCircle2, Circle, Pencil, Plus, Trash2 } from 'lucide-react'
-import { formatPLN, formatYearMonth } from '../../domain/formatting'
+import { formatCurrency, formatYearMonth } from '../../domain/formatting'
+import { useDefaultCurrency } from '../../hooks/useDefaultCurrency'
 import type { UpcomingExpense } from '../../domain/types'
 import { useStore } from '../../store'
 import { UpcomingExpenseForm } from './UpcomingExpenseForm'
+import { translate as t } from '../../i18n'
 
 export function UpcomingExpenseList() {
   const upcomingExpenses = useStore(s => s.upcomingExpenses)
@@ -51,7 +53,7 @@ export function UpcomingExpenseList() {
           onClick={() => setAdding(true)}
           className="w-full flex items-center justify-center gap-2 py-2 text-sm text-blue-600 dark:text-blue-400 border border-dashed border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
         >
-          <Plus size={14} /> Dodaj nadchodzący wydatek
+          <Plus size={14} /> {t('expenses.list.addUpcoming')}
         </button>
       )}
     </div>
@@ -69,6 +71,7 @@ function UpcomingExpenseRow({
   onRemove: () => void
   onToggle: () => void
 }) {
+  const currency = useDefaultCurrency()
   const paidClass = expense.isPaid ? 'opacity-55' : ''
 
   return (
@@ -80,22 +83,22 @@ function UpcomingExpenseRow({
             ? 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
             : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
         }`}
-        title={expense.isPaid ? 'Oznacz jako nieopłacone' : 'Oznacz jako opłacone'}
+        title={expense.isPaid ? t('expenses.list.markUnpaid') : t('expenses.list.markPaid')}
       >
         {expense.isPaid ? <CheckCircle2 size={15} /> : <Circle size={15} />}
       </button>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{expense.name}</p>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          {formatPLN(expense.amount)} · {formatYearMonth(expense.targetMonth)}
-          {expense.isPaid && ' · opłacone'}
+          {formatCurrency(expense.amount, currency)} · {formatYearMonth(expense.targetMonth)}
+          {expense.isPaid && t('expenses.list.paidSuffix')}
         </p>
       </div>
       <div className="flex gap-1 shrink-0">
-        <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors" title="Edytuj">
+        <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors" title={t('common.actions.edit')}>
           <Pencil size={13} />
         </button>
-        <button onClick={onRemove} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Usuń">
+        <button onClick={onRemove} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title={t('common.actions.delete')}>
           <Trash2 size={13} />
         </button>
       </div>

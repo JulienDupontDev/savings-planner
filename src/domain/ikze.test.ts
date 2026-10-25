@@ -89,14 +89,14 @@ describe('IKZE planner', () => {
     expect(summary.perPayout).toBe(550)
   })
 
-  it('builds default plans for Jakub and wife using payouts left to December', () => {
+  it('builds generic default plans using payouts left to December', () => {
     expect(payoutsLeftToYearEnd('2026-06')).toBe(7)
 
     const defaults = buildDefaultIkzePlans('2026-06')
 
     expect(defaults).toMatchObject([
-      { id: 'ikze-jakub-2026', ownerName: 'Jakub', role: 'entrepreneur', year: 2026, annualLimit: 0, contributedAmount: 0, payoutsLeft: 7 },
-      { id: 'ikze-zona-2026', ownerName: 'Zona', role: 'employee', year: 2026, annualLimit: 0, contributedAmount: 0, payoutsLeft: 7 },
+      { id: 'retirement-plan-1-2026', ownerName: 'Person 1', role: 'entrepreneur', year: 2026, annualLimit: 0, contributedAmount: 0, payoutsLeft: 7 },
+      { id: 'retirement-plan-2-2026', ownerName: 'Person 2', role: 'employee', year: 2026, annualLimit: 0, contributedAmount: 0, payoutsLeft: 7 },
     ])
   })
 

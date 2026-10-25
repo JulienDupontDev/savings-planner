@@ -25,6 +25,12 @@ const snapshots: AccountSnapshot[] = [
 ]
 
 describe('security buffers', () => {
+  it('omits the emergency fund buffer when disabled in settings', () => {
+    const model = buildSecurityBuffers({ ...settings, emergencyFundEnabled: false }, accounts, snapshots)
+    expect(model.buffers.map(buffer => buffer.id)).toEqual(['safety_cushion'])
+    expect(model.missingBuffers.some(buffer => buffer.id === 'emergency_fund')).toBe(false)
+  })
+
   it('uses the same committed monthly cost basis as assets KPIs', () => {
     const schedule = {
       rows: [

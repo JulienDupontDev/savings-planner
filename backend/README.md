@@ -23,6 +23,32 @@ docker compose -f docker-compose.dev.yml up -d
 
 Domyślny token developerski to `dev-token`; requesty API wysyłaj z nagłówkiem `X-Api-Token: dev-token`.
 
+## Logi aplikacji (Application Logs)
+
+Spring Boot loguje standardowo przez **SLF4J + Logback**:
+
+- **W trybie lokalnym / procesie konsolowym:**
+  Logi są wypisywane na standardowe wyjście (`stdout`/`stderr`). Jeśli uruchamiasz proces w tle (detached) z przekierowaniem:
+  ```bash
+  # Przykład przekierowania przy uruchomieniu w tle:
+  java -jar build/libs/savings-planner-backend-1.0.0.jar --spring.profiles.active=local > /tmp/backend.log 2>&1 &
+  tail -f /tmp/backend.log
+  ```
+- **W Dockerze / Docker Compose:**
+  ```bash
+  docker compose logs -f backend
+  # lub bezpośrednio po nazwie kontenera:
+  docker logs -f savings-planner-backend
+  ```
+- **Konfiguracja poziomu logowania:**
+  Można dostosować poziom logów w `application.yml` (lub przekazać w parametrach CLI, np. `--logging.level.pl.jakubmikolajczyk.savings=DEBUG`):
+  ```yaml
+  logging:
+    level:
+      root: INFO
+      pl.jakubmikolajczyk.savings: DEBUG
+  ```
+
 ## Co tu jest i po co
 
 - `build.gradle.kts` to Gradle Kotlin DSL. W Javie często widzisz Groovy DSL albo Maven XML; tutaj konfiguracja jest kodem Kotlinowym z typami i autouzupełnianiem.

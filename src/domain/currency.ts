@@ -1,3 +1,12 @@
+export const SUPPORTED_CURRENCIES = [
+  { code: 'PLN', nameKey: 'common.currencies.PLN' },
+  { code: 'EUR', nameKey: 'common.currencies.EUR' },
+  { code: 'USD', nameKey: 'common.currencies.USD' },
+  { code: 'GBP', nameKey: 'common.currencies.GBP' },
+  { code: 'CHF', nameKey: 'common.currencies.CHF' },
+  { code: 'CZK', nameKey: 'common.currencies.CZK' },
+] as const
+
 const roundToGrosze = (value: number): number => Math.round(value * 100) / 100
 
 export function formatCurrencyInput(value: number): string {

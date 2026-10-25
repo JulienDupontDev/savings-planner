@@ -137,6 +137,43 @@ class CategorizationRepositoryTest @Autowired constructor(
     }
 
     @Test
+    fun `deleteCategory cascades rules and transactions`() {
+        val account = accounts.save(AccountEntity(name = "Alior", bucket = "accounts"))
+        val category = repository.createCategory(
+            pl.jakubmikolajczyk.savings.dto.CategoryDto(name = "Do usuniecia", kind = pl.jakubmikolajczyk.savings.dto.CategoryKind.variable)
+        )
+        val categoryId = category.id ?: error("Created category must have id")
+        val childCategory = repository.createCategory(
+            pl.jakubmikolajczyk.savings.dto.CategoryDto(
+                name = "Dziecko",
+                kind = pl.jakubmikolajczyk.savings.dto.CategoryKind.variable,
+                parentId = categoryId,
+            )
+        )
+        val childCategoryId = childCategory.id ?: error("Created child must have id")
+        repository.createRule(
+            pl.jakubmikolajczyk.savings.dto.CategoryRuleDto(
+                matchField = pl.jakubmikolajczyk.savings.dto.RuleMatchField.description,
+                matchType = pl.jakubmikolajczyk.savings.dto.RuleMatchType.contains,
+                pattern = "unikalny_wzorzec",
+                categoryId = categoryId,
+            )
+        )
+        val txId = insertTransaction(account.id, "unikalny_wzorzec opis", null)
+        service.overrideTransactionCategory(txId, TransactionCategoryOverrideDto(categoryId = categoryId, locked = true))
+
+        service.deleteCategory(categoryId)
+
+        val remainingRules = repository.listRules().filter { it.categoryId == categoryId }
+        assertEquals(0, remainingRules.size)
+        val tx = repository.listTransactions(account.id, null, false, null, 10).first { it.id == txId }
+        assertEquals(null, tx.categoryId)
+        assertEquals(false, tx.categoryLocked)
+        val updatedChild = repository.findCategory(childCategoryId)
+        assertEquals(null, updatedChild?.parentId)
+    }
+
+    @Test
     fun `transactions can be listed by pay period`() {
         val account = accounts.save(AccountEntity(name = "Alior", bucket = "accounts"))
         val firstAnchorId = insertTransaction(

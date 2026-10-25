@@ -1,5 +1,6 @@
-import { allSnapshotMonths, balanceAsOf, BUCKET_LABELS } from './accounts'
+import { allSnapshotMonths, balanceAsOf } from './accounts'
 import type { Account, AccountBucket, AccountSnapshot, Schedule, Settings } from './types'
+import { translate as t, translateAccountBucket } from '../i18n'
 
 export type SecurityBufferId = 'emergency_fund' | 'safety_cushion'
 export type SecurityBufferStatus = 'no_snapshots' | 'missing' | 'met'
@@ -46,26 +47,28 @@ export function buildSecurityBuffers(
   const safetyBuckets = settings.emergencyFundBuckets ?? ['safety_cushion']
   const safetyCurrent = latestMonth ? sumBuckets(accounts, snapshots, latestMonth, safetyBuckets) : 0
   const emergencyCurrent = latestMonth ? sumBuckets(accounts, snapshots, latestMonth, ['emergency_fund']) : 0
-  const buffers: SecurityBuffer[] = [
+  const emergencyEnabled = settings.emergencyFundEnabled !== false
+  const allBuffers: SecurityBuffer[] = [
     makeBuffer({
       id: 'emergency_fund',
-      title: 'Fundusz awaryjny',
+      title: t('common.labels.emergencyFund'),
       current: emergencyCurrent,
       target: settings.emergencyFundTarget ?? 10000,
       latestMonth,
-      detail: 'Bucket: Fundusz awaryjny',
-      focusCopy: 'Najpierw szybki bufor na nagłe tematy, zanim gonimy inne cele.',
+      detail: t('accounts.kpi.emergencyBucket'),
+      focusCopy: t('security.fundFirst'),
     }),
     makeBuffer({
       id: 'safety_cushion',
-      title: 'Poduszka bezpieczeństwa',
+      title: t('common.labels.securityCushion'),
       current: safetyCurrent,
       target: monthlyCostBasis * safetyCushionMonths,
       latestMonth,
       detail: `${formatBucketSubtitle(safetyBuckets)} · cel ${safetyCushionMonths} mies.`,
-      focusCopy: 'Elo mordo, to jest spokój ducha i rodziny. Odbuduj to przed mniej krytycznymi celami.',
+      focusCopy: t('security.safetyCushionCopy'),
     }),
   ]
+  const buffers = emergencyEnabled ? allBuffers : allBuffers.filter(buffer => buffer.id !== 'emergency_fund')
   const missingBuffers = buffers.filter(buffer => buffer.status === 'missing')
 
   return {
@@ -122,6 +125,6 @@ function sumBuckets(accounts: Account[], snapshots: AccountSnapshot[], yearMonth
 }
 
 function formatBucketSubtitle(buckets: AccountBucket[]): string {
-  if (buckets.length === 0) return 'Brak bucketów'
-  return buckets.map(bucket => BUCKET_LABELS[bucket]).join(' + ')
+  if (buckets.length === 0) return t('common.empty.noBuckets')
+  return buckets.map(translateAccountBucket).join(' + ')
 }

@@ -213,6 +213,14 @@ export const categoryRulesApi = {
 }
 
 export const transactionsApi = {
+  create: (transaction: {
+    accountId: string
+    bookedAt: string
+    amount: number
+    description: string
+    counterparty?: string
+    categoryId?: number
+  }) => post<BankTransaction>('/transactions', transaction),
   list: (options: { accountId?: string; periodNo?: number; onlyUncategorized?: boolean; categoryId?: number; limit?: number } = {}) => {
     const params = new URLSearchParams()
     if (options.accountId) params.set('accountId', options.accountId)

@@ -5,12 +5,14 @@ import {
 } from 'recharts'
 import { useStore } from '../../store'
 import { buildSchedule } from '../../domain/allocation'
-import { formatPLN, formatYearMonth } from '../../domain/formatting'
+import { formatCurrency, formatYearMonth } from '../../domain/formatting'
+import { translate as t } from '../../i18n'
 
 const LOAN_COLORS = ['#f97316', '#8b5cf6', '#ec4899', '#14b8a6']
 
 export function LoanChart() {
   const settings = useStore(s => s.settings)
+  const currency = settings.defaultCurrency ?? 'PLN'
   const goals = useStore(s => s.goals)
   const loans = useStore(s => s.loans)
   const mortgagePlan = useStore(s => s.mortgagePlan)
@@ -63,9 +65,9 @@ export function LoanChart() {
       {/* Nadpłata slider */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-          <span>Co jeśli nadpłacam kredyt o:</span>
+          <span>{t('loans.chart.overpaymentPrompt')}</span>
           <span className={`font-bold tabular-nums ${loanOverpayment > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
-            {loanOverpayment === 0 ? 'bez nadpłaty' : `+${formatPLN(loanOverpayment)}/mies.`}
+            {loanOverpayment === 0 ? t('loans.chart.noOverpayment') : `+${formatCurrency(loanOverpayment, currency)}${t('scenarios.monthSuffix')}`}
           </span>
         </div>
         <input
@@ -78,20 +80,20 @@ export function LoanChart() {
           className="w-full accent-orange-500"
         />
         <div className="flex justify-between text-xs text-gray-400">
-          <span>0 zł</span>
-          <button onClick={() => setLoanOverpayment(0)} className="text-orange-500 hover:text-orange-700 underline">reset</button>
-          <span>+10 000 zł</span>
+          <span>{formatCurrency(0, currency)}</span>
+          <button onClick={() => setLoanOverpayment(0)} className="text-orange-500 hover:text-orange-700 underline">{t('loans.chart.reset')}</button>
+          <span>+{formatCurrency(10000, currency)}</span>
         </div>
       </div>
 
       {/* Payoff summary */}
       {payoffSummary.length > 0 && (
         <div className="flex flex-wrap gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-          <span className="text-xs text-gray-500 dark:text-gray-400 self-center">Efekt nadpłaty:</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 self-center">{t('loans.chart.overpaymentEffect')}</span>
           {payoffSummary.map(s => s && (
             <span key={s.name} className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
               <span style={{ color: s.color }}>■</span>{' '}
-              {s.name}: −{s.delta} mies.
+              {s.name}: −{s.delta} {t('common.time.months')}
             </span>
           ))}
         </div>
@@ -114,7 +116,7 @@ export function LoanChart() {
               const isWhatIf = key.startsWith('wi_')
               const loanId = key.replace(/^(base_|wi_)/, '')
               const loan = loans.find(l => l.id === loanId)
-              return [formatPLN(value), `${loan?.name ?? loanId}${isWhatIf ? ' (nadpłata)' : ''}`]
+              return [formatCurrency(value, currency), `${loan?.name ?? loanId}${isWhatIf ? ` ${t('loans.chart.scenarioSuffix')}` : ''}`]
             }}
             contentStyle={{ fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}
           />
@@ -123,7 +125,7 @@ export function LoanChart() {
               const isWhatIf = value.startsWith('wi_')
               const loanId = value.replace(/^(base_|wi_)/, '')
               const loan = loans.find(l => l.id === loanId)
-              return `${loan?.name ?? loanId}${isWhatIf ? ' (nadpłata)' : ''}`
+              return `${loan?.name ?? loanId}${isWhatIf ? ` ${t('loans.chart.scenarioSuffix')}` : ''}`
             }}
             wrapperStyle={{ fontSize: 11 }}
           />
@@ -139,7 +141,7 @@ export function LoanChart() {
                 x={formatYearMonth(payoffYM)}
                 stroke={color}
                 strokeDasharray="4 2"
-                label={{ value: `Spłata: ${lp.name}`, fontSize: 9, fill: color, position: 'insideTopLeft' }}
+                label={{ value: t('loans.chart.payoffLabel', { name: lp.name }), fontSize: 9, fill: color, position: 'insideTopLeft' }}
               />
             )
           })}
@@ -177,7 +179,7 @@ export function LoanChart() {
       </ResponsiveContainer>
 
       <p className="text-xs text-gray-400">
-        Przerywana linia = scenariusz z nadpłatą. Pionowa linia = data spłaty. Po spłacie rata wraca do puli oszczędności.
+        {t('loans.chart.explanation')}
       </p>
     </div>
   )
