@@ -229,6 +229,8 @@ fun GoalEntity.toDto() = GoalDto(
     priority = priority,
     fixedAllocation = fixedAllocation,
     currentSaved = currentSaved,
+    important = important,
+    accountId = accountId,
 )
 
 fun GoalDto.toEntity(existing: GoalEntity? = null) = (existing ?: GoalEntity()).also {
@@ -239,4 +241,6 @@ fun GoalDto.toEntity(existing: GoalEntity? = null) = (existing ?: GoalEntity()).
     it.priority = priority
     it.fixedAllocation = fixedAllocation
     it.currentSaved = currentSaved
+    it.important = important
+    it.accountId = accountId
 }

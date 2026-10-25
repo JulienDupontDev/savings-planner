@@ -180,6 +180,9 @@ data class GoalDto(
     @field:Min(1) val priority: Int,
     val fixedAllocation: BigDecimal? = null,
     val currentSaved: BigDecimal? = BigDecimal.ZERO,
+    val important: Boolean = false,
+    // Konto, z którego saldo (ostatni snapshot) zastępuje currentSaved.
+    val accountId: UUID? = null,
 )
 
 data class MortgageOneTimeOverpaymentDto(
@@ -422,6 +425,7 @@ data class PayPeriodDto(
     val periodEnd: String? = null,
     val anchorTxId: Long,
     val isPartial: Boolean,
+    val startOverridden: Boolean = false,
     @field:NotNull val income: BigDecimal,
     @field:NotNull val expense: BigDecimal,
     @field:NotNull val net: BigDecimal,
@@ -539,4 +543,8 @@ data class GoalInsightsDto(
     @field:NotNull val averageNetPerCycle: BigDecimal,
     @field:NotNull val averageFreeCashPerCycle: BigDecimal,
     @field:Valid val goals: List<GoalPaceDto>,
+)
+
+data class PayPeriodStartUpdateDto(
+    @field:NotBlank val startDate: String,
 )

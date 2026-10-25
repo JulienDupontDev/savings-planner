@@ -1,5 +1,7 @@
+import { useSecurityState } from './hooks/useSecurityState'
+import { useResolvedGoals } from './hooks/useResolvedGoals'
 import { useEffect, useMemo, useState } from 'react'
-import { usePlanHiddenBlocks } from './hooks/usePlanBlocks'
+import { useHiddenBlocks } from './hooks/useHiddenBlocks'
 import {
   BarChart3,
   CalendarClock,
@@ -42,7 +44,7 @@ import { PayPeriodsSection } from './components/payperiods/PayPeriodsSection'
 import { ScheduleTable } from './components/schedule/ScheduleTable'
 import { SubscriptionList, SubscriptionTotal } from './components/subscriptions/SubscriptionList'
 import { AdvancedSettings } from './components/ui/AdvancedSettings'
-import { PageHeader, SectionCard, StatCard, surface } from './components/ui/Layout'
+import { HideableBlock, PageHeader, SectionCard, StatCard, surface } from './components/ui/Layout'
 import { allSnapshotMonths, balanceAsOf, totalAssetsAsOf } from './domain/accounts'
 import { buildSchedule } from './domain/allocation'
 import { formatCurrency, formatYearMonth } from './domain/formatting'
@@ -243,19 +245,20 @@ function OverviewPage({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         description={t('app.overview.description')}
         icon={LayoutDashboard}
         accent="overview"
+        action={<BlocksMenu blocks={OVERVIEW_BLOCKS} />}
       />
 
-      <NetWorthHero overview={overview} />
+      <HideableBlock blockId="overview.hero"><NetWorthHero overview={overview} /></HideableBlock>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <HideableBlock blockId="overview.stats"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label={t('app.overview.monthlyIncome')} value={overview.monthlyIncome} detail={overview.cashflowMonthLabel} tone="positive" />
         <StatCard label={t('app.overview.monthlyCosts')} value={overview.monthlyCosts} detail={overview.costsDetail} tone="negative" />
         <StatCard label={t('app.overview.monthlyFreeCash')} value={overview.freeCash} detail={overview.freeCashDetail} tone={overview.freeCashTone} />
         <StatCard label={t('common.labels.securityCushion')} value={overview.emergencyFund} detail={overview.emergencyFundLabel} tone="asset" />
-      </div>
+      </div></HideableBlock>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]">
-        <SectionCard title={t('app.overview.netWorthHistory')} description={t('app.overview.netWorthHistoryDescription')} icon={TrendingUp} accent="assets">
+        <SectionCard blockId="overview.history" title={t('app.overview.netWorthHistory')} description={t('app.overview.netWorthHistoryDescription')} icon={TrendingUp} accent="assets">
           <NetWorthChart
             accounts={overview.accounts}
             snapshots={overview.snapshots}
@@ -263,11 +266,11 @@ function OverviewPage({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
             mortgagePlan={overview.mortgagePlan}
           />
         </SectionCard>
-        <AssetsPie accounts={overview.accounts} snapshots={overview.snapshots} />
+        <HideableBlock blockId="overview.pie"><AssetsPie accounts={overview.accounts} snapshots={overview.snapshots} /></HideableBlock>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title={t('app.overview.nearbyGoals')} icon={ListChecks} accent="plan">
+        <SectionCard blockId="overview.goals" title={t('app.overview.nearbyGoals')} icon={ListChecks} accent="plan">
           {overview.nextGoals.length === 0 ? (
             <EmptyLine text={t('app.overview.noActiveGoals')} />
           ) : (
@@ -288,7 +291,7 @@ function OverviewPage({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
           <DomainButton onClick={() => onNavigate('plan')} label={t('app.overview.openPlan')} />
         </SectionCard>
 
-        <SectionCard title={t('app.overview.upcomingExpenses')} icon={CalendarClock} accent="plan">
+        <SectionCard blockId="overview.expenses" title={t('app.overview.upcomingExpenses')} icon={CalendarClock} accent="plan">
           {overview.nextExpenses.length === 0 ? (
             <EmptyLine text={t('app.overview.noUpcomingExpenses')} />
           ) : (
@@ -316,7 +319,7 @@ function AssetsPage() {
   useAccountSnapshotsOnDemand()
   return (
     <div className="space-y-5">
-      <PageHeader title={t('app.assets.title')} description={t('app.assets.description')} icon={WalletCards} accent="assets" />
+      <PageHeader title={t('app.assets.title')} description={t('app.assets.description')} icon={WalletCards} accent="assets" action={<BlocksMenu blocks={ASSETS_BLOCKS} />} />
       <AccountsSection />
     </div>
   )
@@ -333,6 +336,31 @@ function useAccountSnapshotsOnDemand() {
     }
   }, [hasHydratedFromBackend, hasLoadedAccountSnapshots, loadAccountSnapshots])
 }
+
+const OVERVIEW_BLOCKS = [
+  { id: 'overview.hero', label: 'app.overview.heroBlock' },
+  { id: 'overview.stats', label: 'app.overview.statsBlock' },
+  { id: 'overview.history', label: 'app.overview.netWorthHistory' },
+  { id: 'overview.pie', label: 'app.overview.pieBlock' },
+  { id: 'overview.goals', label: 'app.overview.nearbyGoals' },
+  { id: 'overview.expenses', label: 'app.overview.upcomingExpenses' },
+]
+
+const ASSETS_BLOCKS = [
+  { id: 'assets.kpi', label: 'app.assets.kpiBlock' },
+  { id: 'assets.buckets', label: 'app.assets.bucketsBlock' },
+  { id: 'assets.history', label: 'app.assets.accountHistory' },
+  { id: 'assets.pie', label: 'app.overview.pieBlock' },
+  { id: 'assets.table', label: 'accounts.section.snapshotsTitle' },
+]
+
+const TRANSACTIONS_BLOCKS = [
+  { id: 'transactions.manual', label: 'manualTransaction.title' },
+  { id: 'transactions.payPeriods', label: 'app.transactions.payPeriods' },
+  { id: 'transactions.leak', label: 'app.transactions.leakAnalysis' },
+  { id: 'transactions.categorization', label: 'app.transactions.categorization' },
+  { id: 'transactions.import', label: 'app.transactions.statementImport' },
+]
 
 const PLAN_BLOCKS: { id: string; label: string }[] = [
   { id: 'cashflow', label: 'app.plan.monthlyCashflow' },
@@ -351,17 +379,17 @@ const PLAN_BLOCKS: { id: string; label: string }[] = [
   { id: 'schedule', label: 'app.plan.monthlySchedule' },
 ]
 
-function PlanBlocksMenu() {
+function BlocksMenu({ blocks }: { blocks: { id: string; label: string }[] }) {
   const t = useT()
-  const { hidden, toggle, reset } = usePlanHiddenBlocks()
+  const { hidden, toggle, reset } = useHiddenBlocks()
   return (
     <details className="relative">
       <summary className="cursor-pointer select-none rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
         {t('app.plan.blocks.title')}
-        {hidden.length > 0 && ` (${PLAN_BLOCKS.length - hidden.length}/${PLAN_BLOCKS.length})`}
+        {hidden.length > 0 && ` (${blocks.filter(block => !hidden.includes(block.id)).length}/${blocks.length})`}
       </summary>
       <div className="absolute right-0 z-20 mt-2 w-64 space-y-1 rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-900">
-        {PLAN_BLOCKS.map(block => (
+        {blocks.map(block => (
           <label key={block.id} className="flex cursor-pointer items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
             <input type="checkbox" checked={!hidden.includes(block.id)} onChange={() => toggle(block.id)} />
             {t(block.label)}
@@ -380,21 +408,22 @@ function PlanPage() {
   useAccountSnapshotsOnDemand()
   const settings = useStore(s => s.settings)
   const currency = settings.defaultCurrency ?? 'PLN'
-  const goals = useStore(s => s.goals)
+  const goals = useResolvedGoals()
+  const securityState = useSecurityState()
   const loans = useStore(s => s.loans)
   const mortgagePlan = useStore(s => s.mortgagePlan)
   const subscriptions = useStore(s => s.subscriptions)
   const upcomingExpenses = useStore(s => s.upcomingExpenses)
   const overrides = useStore(s => s.overrides)
   const schedule = useMemo(
-    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses),
-    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses],
+    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses, securityState),
+    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
   const mortgageSummary = schedule.mortgageSummary
 
   return (
     <div className="space-y-5">
-      <PageHeader title={t('app.plan.title')} description={t('app.plan.description')} icon={BarChart3} accent="plan" action={<PlanBlocksMenu />} />
+      <PageHeader title={t('app.plan.title')} description={t('app.plan.description')} icon={BarChart3} accent="plan" action={<BlocksMenu blocks={PLAN_BLOCKS} />} />
 
       <SectionCard blockId="cashflow" title={t('app.plan.monthlyCashflow')} description={t('app.plan.monthlyCashflowDescription')} icon={CircleDollarSign} accent="plan">
         <Hero />
@@ -506,20 +535,20 @@ function TransactionsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title={t('app.transactions.title')} description={t('app.transactions.description')} icon={Tags} accent="assets" />
-      <SectionCard title={t('manualTransaction.title')} description={t('manualTransaction.description')} icon={ReceiptText} accent="assets">
+      <PageHeader title={t('app.transactions.title')} description={t('app.transactions.description')} icon={Tags} accent="assets" action={<BlocksMenu blocks={TRANSACTIONS_BLOCKS} />} />
+      <SectionCard blockId="transactions.manual" title={t('manualTransaction.title')} description={t('manualTransaction.description')} icon={ReceiptText} accent="assets">
         <ManualTransactionForm />
       </SectionCard>
-      <SectionCard title={t('app.transactions.payPeriods')} description={t('app.transactions.payPeriodsDescription')} icon={CalendarClock} accent="assets">
+      <SectionCard blockId="transactions.payPeriods" title={t('app.transactions.payPeriods')} description={t('app.transactions.payPeriodsDescription')} icon={CalendarClock} accent="assets">
         <PayPeriodsSection selectedKey={selectedPayPeriodKey} onSelectedKeyChange={setSelectedPayPeriodKey} />
       </SectionCard>
-      <SectionCard title={t('app.transactions.leakAnalysis')} description={t('app.transactions.leakAnalysisDescription')} icon={TrendingUp} accent="assets">
+      <SectionCard blockId="transactions.leak" title={t('app.transactions.leakAnalysis')} description={t('app.transactions.leakAnalysisDescription')} icon={TrendingUp} accent="assets">
         <LeakAnalysisSection selectedPeriod={selectedPeriod} />
       </SectionCard>
-      <SectionCard title={t('app.transactions.categorization')} icon={Tags} accent="assets">
+      <SectionCard blockId="transactions.categorization" title={t('app.transactions.categorization')} icon={Tags} accent="assets">
         <CategorizationSection />
       </SectionCard>
-      <SectionCard title={t('app.transactions.statementImport')} description={t('app.transactions.statementImportDescription')} icon={FileUp} accent="assets">
+      <SectionCard blockId="transactions.import" title={t('app.transactions.statementImport')} description={t('app.transactions.statementImportDescription')} icon={FileUp} accent="assets">
         <IngestSection />
       </SectionCard>
     </div>
@@ -598,7 +627,8 @@ function useOverviewModel() {
   const t = useT()
   const settings = useStore(s => s.settings)
   const currency = settings.defaultCurrency ?? 'PLN'
-  const goals = useStore(s => s.goals)
+  const goals = useResolvedGoals()
+  const securityState = useSecurityState()
   const loans = useStore(s => s.loans)
   const accounts = useStore(s => s.accounts)
   const snapshots = useStore(s => s.accountSnapshots)
@@ -608,8 +638,8 @@ function useOverviewModel() {
   const overrides = useStore(s => s.overrides)
 
   const schedule = useMemo(
-    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses),
-    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses],
+    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses, securityState),
+    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
 
   const months = allSnapshotMonths(snapshots)

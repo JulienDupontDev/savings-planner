@@ -1,3 +1,5 @@
+import { useSecurityState } from '../../hooks/useSecurityState'
+import { useResolvedGoals } from '../../hooks/useResolvedGoals'
 import { useMemo } from 'react'
 import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid,
@@ -13,7 +15,8 @@ const LOAN_COLORS = ['#f97316', '#8b5cf6', '#ec4899', '#14b8a6']
 export function LoanChart() {
   const settings = useStore(s => s.settings)
   const currency = settings.defaultCurrency ?? 'PLN'
-  const goals = useStore(s => s.goals)
+  const goals = useResolvedGoals()
+  const securityState = useSecurityState()
   const loans = useStore(s => s.loans)
   const mortgagePlan = useStore(s => s.mortgagePlan)
   const overrides = useStore(s => s.overrides)
@@ -21,12 +24,12 @@ export function LoanChart() {
   const setLoanOverpayment = useStore(s => s.setLoanOverpayment)
 
   const schedule = useMemo(
-    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan),
-    [settings, goals, loans, overrides, mortgagePlan],
+    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, [], [], securityState),
+    [settings, goals, loans, overrides, mortgagePlan, securityState],
   )
   const whatIfSchedule = useMemo(
-    () => buildSchedule(settings, goals, loans, overrides, 0, loanOverpayment, mortgagePlan),
-    [settings, goals, loans, overrides, loanOverpayment, mortgagePlan],
+    () => buildSchedule(settings, goals, loans, overrides, 0, loanOverpayment, mortgagePlan, [], [], securityState),
+    [settings, goals, loans, overrides, loanOverpayment, mortgagePlan, securityState],
   )
 
   if (loans.length === 0) return null

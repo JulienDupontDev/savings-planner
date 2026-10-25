@@ -128,3 +128,22 @@ function formatBucketSubtitle(buckets: AccountBucket[]): string {
   if (buckets.length === 0) return t('common.empty.noBuckets')
   return buckets.map(translateAccountBucket).join(' + ')
 }
+
+/** Current balances of the security accounts, used by the schedule to reserve cash for security before goals. */
+export interface SecurityState {
+  cushionCurrent: number
+  emergencyCurrent: number
+}
+
+export function buildSecurityState(
+  settings: Settings,
+  accounts: Account[],
+  snapshots: AccountSnapshot[],
+): SecurityState | undefined {
+  const latestMonth = allSnapshotMonths(snapshots).at(-1)
+  if (!latestMonth) return undefined
+  return {
+    cushionCurrent: sumBuckets(accounts, snapshots, latestMonth, settings.emergencyFundBuckets ?? ['safety_cushion']),
+    emergencyCurrent: sumBuckets(accounts, snapshots, latestMonth, ['emergency_fund']),
+  }
+}

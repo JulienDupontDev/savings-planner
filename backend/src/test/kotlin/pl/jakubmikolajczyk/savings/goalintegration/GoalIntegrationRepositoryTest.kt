@@ -69,6 +69,44 @@ class GoalIntegrationRepositoryTest @Autowired constructor(
         assertEquals(BigDecimal("3700.00"), cycle.freeCash)
     }
 
+    @Test
+    fun `goal inputs read saved amount from the linked account by priority`() {
+        val account = accounts.save(AccountEntity(name = "Vacances", bucket = "vacation"))
+        jdbc.update(
+            "insert into finance.account_snapshots (id, account_id, snapshot_date, balance) values (:id, :account, :date, :balance)",
+            MapSqlParameterSource()
+                .addValue("id", UUID.randomUUID()).addValue("account", account.id)
+                .addValue("date", Date.valueOf("2026-05-01")).addValue("balance", BigDecimal("100")),
+        )
+        jdbc.update(
+            "insert into finance.account_snapshots (id, account_id, snapshot_date, balance) values (:id, :account, :date, :balance)",
+            MapSqlParameterSource()
+                .addValue("id", UUID.randomUUID()).addValue("account", account.id)
+                .addValue("date", Date.valueOf("2026-06-01")).addValue("balance", BigDecimal("1500")),
+        )
+        insertGoal("First", 1, "1000", account.id)
+        insertGoal("Second", 2, "1000", account.id)
+        insertGoal("Manual", 3, "1000", null, "40")
+
+        val byName = repository.listGoalInputs().associateBy { it.name }
+
+        assertEquals(0, BigDecimal("1000").compareTo(byName.getValue("First").currentSaved))
+        assertEquals(0, BigDecimal("500").compareTo(byName.getValue("Second").currentSaved))
+        assertEquals(0, BigDecimal("40").compareTo(byName.getValue("Manual").currentSaved))
+    }
+
+    private fun insertGoal(name: String, priority: Int, target: String, accountId: UUID?, saved: String = "0") {
+        jdbc.update(
+            """
+                insert into finance.goals (id, name, target_amount, priority, current_saved, account_id)
+                values (:id, :name, :target, :priority, :saved, :account)
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("id", UUID.randomUUID()).addValue("name", name).addValue("target", BigDecimal(target))
+                .addValue("priority", priority).addValue("saved", BigDecimal(saved)).addValue("account", accountId),
+        )
+    }
+
     private fun categoryId(name: String): Long =
         jdbc.query(
             "select id from finance.categories where name = :name",

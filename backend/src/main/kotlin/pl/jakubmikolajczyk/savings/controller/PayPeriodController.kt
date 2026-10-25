@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import pl.jakubmikolajczyk.savings.dto.IncomeAnchorCreateDto
 import pl.jakubmikolajczyk.savings.dto.PayPeriodSettingsDto
+import pl.jakubmikolajczyk.savings.dto.PayPeriodStartUpdateDto
 import pl.jakubmikolajczyk.savings.payperiod.PayPeriodService
 import java.util.UUID
 
@@ -52,6 +53,19 @@ class PayPeriodController(private val service: PayPeriodService) {
     @Operation(summary = "Recalculate pay periods from income anchors")
     @PostMapping("/refresh")
     fun refresh() = service.refreshPayPeriods()
+
+    @Operation(summary = "Override a cycle start date; later cycles are recalculated")
+    @PutMapping("/{accountId}/{periodNo}/start")
+    fun updateStart(
+        @PathVariable accountId: UUID,
+        @PathVariable periodNo: Int,
+        @Valid @RequestBody dto: PayPeriodStartUpdateDto,
+    ) = service.updatePeriodStart(accountId, periodNo, dto.startDate)
+
+    @Operation(summary = "Restore the salary transaction date as cycle start")
+    @DeleteMapping("/{accountId}/{periodNo}/start")
+    fun resetStart(@PathVariable accountId: UUID, @PathVariable periodNo: Int) =
+        service.resetPeriodStart(accountId, periodNo)
 
     @GetMapping("/settings")
     fun settings() = service.settings()

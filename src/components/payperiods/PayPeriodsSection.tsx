@@ -23,6 +23,7 @@ export function PayPeriodsSection({ selectedKey: controlledSelectedKey, onSelect
   const removeIncomeAnchor = useStore(s => s.removeIncomeAnchor)
   const refreshPayPeriods = useStore(s => s.refreshPayPeriods)
   const updatePayPeriodSettings = useStore(s => s.updatePayPeriodSettings)
+  const updatePayPeriodStart = useStore(s => s.updatePayPeriodStart)
   const [localSelectedKey, setLocalSelectedKey] = useState('')
   const [lastRefresh, setLastRefresh] = useState<string | undefined>()
   const selectedKey = controlledSelectedKey ?? localSelectedKey
@@ -106,6 +107,31 @@ export function PayPeriodsSection({ selectedKey: controlledSelectedKey, onSelect
                 </option>
               ))}
             </select>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex flex-col gap-1 text-sm text-gray-600 dark:text-gray-400">
+                {t('payPeriods.startDate')}
+                <input
+                  type="date"
+                  key={`${periodKey(selectedPeriod)}:${selectedPeriod.periodStart}`}
+                  defaultValue={selectedPeriod.periodStart}
+                  onBlur={event => {
+                    const value = event.target.value
+                    if (value && value !== selectedPeriod.periodStart) void updatePayPeriodStart(selectedPeriod, value)
+                  }}
+                  className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
+                />
+              </label>
+              {selectedPeriod.startOverridden && (
+                <button
+                  type="button"
+                  onClick={() => void updatePayPeriodStart(selectedPeriod)}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  {t('payPeriods.resetStartDate')}
+                </button>
+              )}
+              <p className="basis-full text-xs text-gray-500 dark:text-gray-400">{t('payPeriods.startDateHint')}</p>
+            </div>
             <div className="grid gap-2 sm:grid-cols-3">
               <Metric label={t('payPeriods.income')} value={formatCurrency(selectedPeriod.income, accounts.find(account => account.id === selectedPeriod.accountId)?.currency ?? defaultCurrency)} tone="positive" />
               <Metric label={t('payPeriods.expense')} value={formatCurrency(selectedPeriod.expense, accounts.find(account => account.id === selectedPeriod.accountId)?.currency ?? defaultCurrency)} tone="negative" />

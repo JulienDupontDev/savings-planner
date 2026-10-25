@@ -256,6 +256,10 @@ export const payPeriodsApi = {
     return get<PayPeriod[]>(`/pay-periods${query ? `?${query}` : ''}`)
   },
   refresh: () => post<PayPeriodRefreshResult>('/pay-periods/refresh', {}),
+  updateStart: (accountId: string, periodNo: number, startDate: string) =>
+    put<PayPeriodRefreshResult>(`/pay-periods/${accountId}/${periodNo}/start`, { startDate }),
+  resetStart: (accountId: string, periodNo: number) =>
+    del(`/pay-periods/${accountId}/${periodNo}/start`),
   settings: () => get<PayPeriodSettings>('/pay-periods/settings'),
   updateSettings: (settings: PayPeriodSettings) => put<PayPeriodSettings>('/pay-periods/settings', settings),
 }

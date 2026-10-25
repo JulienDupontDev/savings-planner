@@ -1,3 +1,5 @@
+import { useSecurityState } from '../../hooks/useSecurityState'
+import { useResolvedGoals } from '../../hooks/useResolvedGoals'
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   Area,
@@ -35,13 +37,14 @@ type LayerKey = 'whatIf' | 'deadlines' | 'expenses'
 interface ChartPoint {
   label: string
   yearMonth: string
-  [key: string]: string | number
+  [key: string]: string | number | undefined
 }
 
 export function SavingsChart() {
   const settings = useStore(s => s.settings)
   const currency = settings.defaultCurrency ?? 'PLN'
-  const goals = useStore(s => s.goals)
+  const goals = useResolvedGoals()
+  const securityState = useSecurityState()
   const loans = useStore(s => s.loans)
   const accounts = useStore(s => s.accounts)
   const snapshots = useStore(s => s.accountSnapshots)
@@ -53,6 +56,7 @@ export function SavingsChart() {
   const loanOverpayment = useStore(s => s.loanOverpayment)
   const goalInsights = useStore(s => s.goalInsights)
   const [perspective, setPerspective] = useState<ProjectionPerspective | undefined>()
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | undefined>()
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     whatIf: true,
@@ -61,8 +65,8 @@ export function SavingsChart() {
   })
 
   const schedule = useMemo(
-    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses),
-    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses],
+    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses, securityState),
+    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
   const hasWhatIf = whatIfDelta !== 0 || loanOverpayment > 0
   const whatIfSchedule = useMemo(
@@ -76,8 +80,9 @@ export function SavingsChart() {
       mortgagePlan,
       subscriptions,
       upcomingExpenses,
+      securityState,
     ),
-    [settings, goals, loans, overrides, whatIfDelta, loanOverpayment, mortgagePlan, subscriptions, upcomingExpenses],
+    [settings, goals, loans, overrides, whatIfDelta, loanOverpayment, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
   const model = useMemo(
     () => {
@@ -105,8 +110,8 @@ export function SavingsChart() {
     .filter(expense => !expense.isPaid && visibleMonths.has(expense.targetMonth))
     .sort((a, b) => a.targetMonth.localeCompare(b.targetMonth))
   const data = useMemo(
-    () => buildChartPoints(schedule, whatIfSchedule, goals, loans, model.goals),
-    [schedule, whatIfSchedule, goals, loans, model.goals],
+    () => buildChartPoints(schedule, whatIfSchedule, goals, loans, model.goals, model.debts),
+    [schedule, whatIfSchedule, goals, loans, model.goals, model.debts],
   )
   const tickInterval = Math.max(1, Math.floor(data.length / 10))
 
@@ -132,6 +137,16 @@ export function SavingsChart() {
         onLayerToggle={key => setLayers(current => ({ ...current, [key]: !current[key] }))}
       />
 
+      {hiddenKeys.size > 0 && (
+        <button
+          type="button"
+          onClick={() => setHiddenKeys(new Set())}
+          className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          {t('projectionChart.showAll')}
+        </button>
+      )}
+
       <div className="min-h-[340px]">
         <ResponsiveContainer width="100%" height={340}>
           <ComposedChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
@@ -144,8 +159,21 @@ export function SavingsChart() {
               labelFormatter={label => String(label ?? '')}
             />
             <Legend
-              formatter={(value: string) => tooltipName(value, goals, loans, model.goals)}
-              wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+              formatter={(value: string) => {
+                const label = tooltipName(value, goals, loans, model.goals)
+                return <span style={{ opacity: hiddenKeys.has(value.replace('wi_', '')) ? 0.4 : 1, textDecoration: hiddenKeys.has(value.replace('wi_', '')) ? 'line-through' : undefined }}>{label}</span>
+              }}
+              onClick={entry => {
+                const key = String(entry.dataKey ?? entry.value ?? '').replace('wi_', '')
+                if (!key) return
+                setHiddenKeys(current => {
+                  const next = new Set(current)
+                  if (next.has(key)) next.delete(key)
+                  else next.add(key)
+                  return next
+                })
+              }}
+              wrapperStyle={{ fontSize: 11, paddingTop: 8, cursor: 'pointer' }}
             />
 
             {visibleGoals.map((item, index) => {
@@ -156,6 +184,7 @@ export function SavingsChart() {
                   key={item.id}
                   type="monotone"
                   dataKey={`goal_${item.goalId}`}
+                  hide={hiddenKeys.has(`goal_${item.goalId}`)}
                   name={`goal_${item.goalId}`}
                   stroke={color}
                   fill={color}
@@ -176,6 +205,7 @@ export function SavingsChart() {
                   key={item.id}
                   type="monotone"
                   dataKey={`debt_${item.debtId}`}
+                  hide={hiddenKeys.has(`debt_${item.debtId}`)}
                   name={`debt_${item.debtId}`}
                   stroke={color}
                   strokeOpacity={selected ? 1 : 0.5}
@@ -191,6 +221,7 @@ export function SavingsChart() {
                 key={`wi-${item.id}`}
                 type="monotone"
                 dataKey={`wi_goal_${item.goalId}`}
+                hide={hiddenKeys.has(`goal_${item.goalId}`)}
                 name={`wi_goal_${item.goalId}`}
                 stroke={WHAT_IF_COLOR}
                 strokeDasharray="5 4"
@@ -204,6 +235,7 @@ export function SavingsChart() {
                 key={`wi-${item.id}`}
                 type="monotone"
                 dataKey={`wi_debt_${item.debtId}`}
+                hide={hiddenKeys.has(`debt_${item.debtId}`)}
                 name={`wi_debt_${item.debtId}`}
                 stroke={DEBT_COLORS[index % DEBT_COLORS.length]}
                 strokeDasharray="5 4"
@@ -270,16 +302,21 @@ function buildChartPoints(
   goals: Goal[],
   loans: Loan[],
   projectionGoals: ProjectionGoalItem[],
+  projectionDebts: ProjectionDebtItem[],
 ): ChartPoint[] {
   return schedule.rows.map((row, index) => {
     const point: ChartPoint = { label: row.label, yearMonth: row.yearMonth }
     goals.forEach(goal => {
-      point[`goal_${goal.id}`] = row.goalAllocations.find(allocation => allocation.goalId === goal.id)?.balanceAfter ?? 0
-      point[`wi_goal_${goal.id}`] = whatIfSchedule.rows[index]?.goalAllocations.find(allocation => allocation.goalId === goal.id)?.balanceAfter ?? 0
+      const end = goal.deadline?.slice(0, 7) ?? projectionGoals.find(item => item.goalId === goal.id)?.eta
+      const ended = end !== undefined && row.yearMonth > end
+      point[`goal_${goal.id}`] = ended ? undefined : row.goalAllocations.find(allocation => allocation.goalId === goal.id)?.balanceAfter ?? 0
+      point[`wi_goal_${goal.id}`] = ended ? undefined : whatIfSchedule.rows[index]?.goalAllocations.find(allocation => allocation.goalId === goal.id)?.balanceAfter ?? 0
     })
     loans.forEach(loan => {
-      point[`debt_${loan.id}`] = row.loanEntries.find(entry => entry.loanId === loan.id)?.balanceAfter ?? 0
-      point[`wi_debt_${loan.id}`] = whatIfSchedule.rows[index]?.loanEntries.find(entry => entry.loanId === loan.id)?.balanceAfter ?? 0
+      const payoff = projectionDebts.find(item => item.debtId === loan.id)?.eta
+      const ended = payoff !== undefined && row.yearMonth > payoff
+      point[`debt_${loan.id}`] = ended ? undefined : row.loanEntries.find(entry => entry.loanId === loan.id)?.balanceAfter ?? 0
+      point[`wi_debt_${loan.id}`] = ended ? undefined : whatIfSchedule.rows[index]?.loanEntries.find(entry => entry.loanId === loan.id)?.balanceAfter ?? 0
     })
     projectionGoals
       .filter(goal => goal.kind === 'security')

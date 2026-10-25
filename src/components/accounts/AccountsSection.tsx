@@ -1,3 +1,4 @@
+import { useResolvedGoals } from '../../hooks/useResolvedGoals'
 import { useMemo, useState } from 'react'
 import { CalendarPlus, Eye, EyeOff, FileUp, Lock, Pencil, Plus, Trash2, Unlock } from 'lucide-react'
 import { ACCOUNT_BUCKETS, allSnapshotMonths, balanceAsOf } from '../../domain/accounts'
@@ -13,6 +14,7 @@ import { AssetsPie } from './AssetsPie'
 import { ImportCsvDialog } from './ImportCsvDialog'
 import { NetWorthChart } from './NetWorthChart'
 import { translate as t, translateAccountBucket } from '../../i18n'
+import { HideableBlock } from '../ui/Layout'
 
 export function AccountsSection() {
   const accounts = useStore(s => s.accounts)
@@ -30,7 +32,7 @@ export function AccountsSection() {
   const setSnapshot = useStore(s => s.setSnapshot)
   const removeSnapshot = useStore(s => s.removeSnapshot)
   const settings = useStore(s => s.settings)
-  const goals = useStore(s => s.goals)
+  const goals = useResolvedGoals()
   const overrides = useStore(s => s.overrides)
   const subscriptions = useStore(s => s.subscriptions)
   const upcomingExpenses = useStore(s => s.upcomingExpenses)
@@ -81,7 +83,7 @@ export function AccountsSection() {
 
   return (
     <div className="space-y-5">
-      <AssetsKpi
+      <HideableBlock blockId="assets.kpi"><AssetsKpi
         accounts={accounts}
         snapshots={snapshots}
         emergencyFundBuckets={emergencyFundBuckets}
@@ -89,25 +91,25 @@ export function AccountsSection() {
         safetyCushionMonths={safetyCushionMonths}
         emergencyFundTarget={emergencyFundTarget}
         emergencyFundEnabled={settings.emergencyFundEnabled !== false}
-      />
+      /></HideableBlock>
 
-      <EmergencyFundBucketsPanel
+      <HideableBlock blockId="assets.buckets"><EmergencyFundBucketsPanel
         accounts={accounts}
         snapshots={snapshots}
         selectedBuckets={emergencyFundBuckets}
         defaultCurrency={defaultCurrency}
         onChange={buckets => updateSettings({ emergencyFundBuckets: buckets })}
-      />
+      /></HideableBlock>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.55fr)]">
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+        <HideableBlock blockId="assets.history"><div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
           <div className="mb-4">
             <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('app.assets.accountHistory')}</h2>
             <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{t('app.assets.accountHistoryDescription')}</p>
           </div>
           <NetWorthChart accounts={accounts} snapshots={snapshots} loans={loans} mortgagePlan={mortgagePlan} />
-        </div>
-        <AssetsPie accounts={accounts} snapshots={snapshots} />
+        </div></HideableBlock>
+        <HideableBlock blockId="assets.pie"><AssetsPie accounts={accounts} snapshots={snapshots} /></HideableBlock>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
@@ -200,7 +202,7 @@ export function AccountsSection() {
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+      <HideableBlock blockId="assets.table"><div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
         <div className="mb-4">
           <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('accounts.section.snapshotsTitle')}</h2>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{t('app.assets.tableDescription')}</p>
@@ -212,7 +214,7 @@ export function AccountsSection() {
           onSetSnapshot={handleSetSnapshot}
           onRemoveSnapshot={removeSnapshot}
         />
-      </div>
+      </div></HideableBlock>
 
       {importCsvOpen && <ImportCsvDialog onClose={() => setImportCsvOpen(false)} />}
     </div>

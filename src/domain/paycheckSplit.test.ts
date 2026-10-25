@@ -52,13 +52,13 @@ describe('buildPaycheckSplit', () => {
     expect(amountOf(lines, 'trip')).toBe(0)
   })
 
-  it('splits by the security share once the starter buffer exists, keeping deadline goals on track', () => {
+  it('splits by the security share once the starter buffer exists, funding urgent deadline goals before the share', () => {
     const lines = buildPaycheckSplit({
       available: 4000, currentMonth: '2026-06', security: security(8000, 30000), settings, goals: [trip, house],
     })
-    expect(amountOf(lines, 'security:emergency_fund')).toBe(2400)
+    expect(amountOf(lines, 'security:emergency_fund')).toBe(1800)
     expect(amountOf(lines, 'trip')).toBe(1000)
-    expect(amountOf(lines, 'house')).toBe(600)
+    expect(amountOf(lines, 'house')).toBe(1200)
   })
 
   it('always funds IKZE first', () => {
@@ -92,5 +92,14 @@ describe('buildPaycheckSplit', () => {
       available: 500, currentMonth: '2026-06', security: security(30000, 30000), settings, goals: [],
     })
     expect(lines).toEqual([{ kind: 'unallocated', amount: 500, reason: 'nothing_to_fund' }])
+  })
+
+  it('funds an important goal before the security share but after the starter buffer', () => {
+    const car: Goal = { id: 'car', name: 'Car', targetAmount: 12000, priority: 3, important: true }
+    const lines = buildPaycheckSplit({ available: 4000, currentMonth: '2026-06', security: security(0, 36000), settings, goals: [car] })
+    expect(lines[0]).toMatchObject({ targetId: 'security:emergency_fund', reason: 'security_starter', amount: 4000 })
+    const roomy = buildPaycheckSplit({ available: 10000, currentMonth: '2026-06', security: security(6000, 36000), settings, goals: [car] })
+    expect(roomy.find(l => l.targetId === 'car')?.reason).toBe('goal_important')
+    expect(amountOf(roomy, 'security:emergency_fund')).toBe(5400)
   })
 })

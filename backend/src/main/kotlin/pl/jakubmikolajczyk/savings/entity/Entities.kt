@@ -173,6 +173,9 @@ class GoalEntity(
     var fixedAllocation: BigDecimal? = null,
     @Column(name = "current_saved")
     var currentSaved: BigDecimal? = BigDecimal.ZERO,
+    var important: Boolean = false,
+    @Column(name = "account_id")
+    var accountId: UUID? = null,
 )
 
 @Entity

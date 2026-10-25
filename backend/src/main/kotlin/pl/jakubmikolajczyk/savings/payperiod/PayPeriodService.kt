@@ -53,6 +53,24 @@ class PayPeriodService(
         repository.listPayPeriods(accountId, limit)
 
     @Transactional
+    fun updatePeriodStart(accountId: UUID, periodNo: Int, startDate: String): PayPeriodRefreshResultDto {
+        val date = runCatching { java.time.LocalDate.parse(startDate) }
+            .getOrElse { throw BadRequestException("startDate must be YYYY-MM-DD") }
+        val anchorTxId = repository.findAnchorTxId(accountId, periodNo)
+            ?: throw NotFoundException("Pay period $periodNo not found for account $accountId")
+        repository.setStartOverride(anchorTxId, date)
+        return refreshPayPeriods()
+    }
+
+    @Transactional
+    fun resetPeriodStart(accountId: UUID, periodNo: Int): PayPeriodRefreshResultDto {
+        val anchorTxId = repository.findAnchorTxId(accountId, periodNo)
+            ?: throw NotFoundException("Pay period $periodNo not found for account $accountId")
+        repository.clearStartOverride(anchorTxId)
+        return refreshPayPeriods()
+    }
+
+    @Transactional
     fun refreshPayPeriods(): PayPeriodRefreshResultDto {
         val minCycleDays = repository.settings().minCycleDays
         val periods = engine.calculate(repository.anchorTransactions(), minCycleDays)

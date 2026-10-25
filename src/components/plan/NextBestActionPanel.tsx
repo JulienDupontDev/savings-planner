@@ -1,3 +1,4 @@
+import { useResolvedGoals } from '../../hooks/useResolvedGoals'
 import { ArrowRight, CheckCircle2, ListChecks } from 'lucide-react'
 import { useMemo } from 'react'
 import { formatCurrency, formatYearMonth } from '../../domain/formatting'
@@ -11,7 +12,7 @@ import { translate as t } from '../../i18n'
 
 export function NextBestActionPanel({ schedule }: { schedule: Schedule }) {
   const settings = useStore(s => s.settings)
-  const goals = useStore(s => s.goals)
+  const goals = useResolvedGoals()
   const loans = useStore(s => s.loans)
   const mortgagePlan = useStore(s => s.mortgagePlan)
   const subscriptions = useStore(s => s.subscriptions)

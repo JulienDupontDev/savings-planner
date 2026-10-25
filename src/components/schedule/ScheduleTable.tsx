@@ -1,3 +1,5 @@
+import { useSecurityState } from '../../hooks/useSecurityState'
+import { useResolvedGoals } from '../../hooks/useResolvedGoals'
 import { useMemo, useState } from 'react'
 import { useStore } from '../../store'
 import { buildSchedule } from '../../domain/allocation'
@@ -39,7 +41,8 @@ function InlineNumberEdit({
 export function ScheduleTable() {
   const settings = useStore(s => s.settings)
   const currency = settings.defaultCurrency ?? 'PLN'
-  const goals = useStore(s => s.goals)
+  const goals = useResolvedGoals()
+  const securityState = useSecurityState()
   const loans = useStore(s => s.loans)
   const mortgagePlan = useStore(s => s.mortgagePlan)
   const subscriptions = useStore(s => s.subscriptions)
@@ -51,8 +54,8 @@ export function ScheduleTable() {
   const [visibleRowsCount, setVisibleRowsCount] = useState(24)
 
   const schedule = useMemo(
-    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses),
-    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses],
+    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses, securityState),
+    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
   const sortedGoals = [...goals].sort((a, b) => a.priority - b.priority)
   const visibleRows = schedule.rows.slice(0, visibleRowsCount)
@@ -73,6 +76,8 @@ export function ScheduleTable() {
             <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{t('schedule.income')}</th>
             <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{t('schedule.expenses')}</th>
             <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{t('schedule.freeCash')}</th>
+
+            <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{t('schedule.security')}</th>
 
             {/* Per-goal: two columns each */}
             {sortedGoals.map(g => (
@@ -160,6 +165,10 @@ export function ScheduleTable() {
                 }`}>
                   {row.isDeficit && <AlertTriangle size={10} className="inline mr-0.5" />}
                   {formatCurrency(row.freeCash, currency)}
+                </td>
+
+                <td className="py-1.5 px-2 text-right tabular-nums whitespace-nowrap text-teal-700 dark:text-teal-400">
+                  {formatCurrency(row.securityAllocated ?? 0, currency)}
                 </td>
 
                 {/* Per-goal: allocation (editable) + saldo */}

@@ -167,6 +167,7 @@ export interface PayPeriod {
   periodEnd?: string
   anchorTxId: number
   isPartial: boolean
+  startOverridden?: boolean
   income: number
   expense: number
   net: number
@@ -357,6 +358,8 @@ export interface Goal {
   priority: number  // lower = higher priority (1 is first)
   fixedAllocation?: number // fixed PLN/month regardless of priority calc
   currentSaved?: number // already saved before tracking started
+  accountId?: string // linked account: its latest balance replaces currentSaved
+  important?: boolean // monthly need is funded right after the security starter buffer
 }
 
 export type IkzeParticipantRole = 'employee' | 'entrepreneur'
@@ -410,6 +413,7 @@ export interface MonthRow {
   mortgagePaymentTotal: number
   ikzeContributionTotal: number
   freeCash: number
+  securityAllocated?: number // part of the free cash reserved for security buffers before goals
   goalAllocations: GoalAllocation[]
   loanEntries: LoanMonthEntry[]
   mortgageEntry?: MortgageMonthEntry

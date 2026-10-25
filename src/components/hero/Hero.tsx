@@ -1,3 +1,5 @@
+import { useSecurityState } from '../../hooks/useSecurityState'
+import { useResolvedGoals } from '../../hooks/useResolvedGoals'
 import { useMemo } from 'react'
 import { useStore } from '../../store'
 import { buildSchedule } from '../../domain/allocation'
@@ -14,7 +16,8 @@ export function Hero() {
    */
   const settings = useStore(s => s.settings)
   const currency = settings.defaultCurrency ?? 'PLN'
-  const goals = useStore(s => s.goals)
+  const goals = useResolvedGoals()
+  const securityState = useSecurityState()
   const loans = useStore(s => s.loans)
   const mortgagePlan = useStore(s => s.mortgagePlan)
   const subscriptions = useStore(s => s.subscriptions)
@@ -31,8 +34,8 @@ export function Hero() {
      * Angular porównanie:
      * To podobne do przeniesienia ciężkiej logiki z template do service/pure function.
      */
-    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses),
-    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses],
+    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses, securityState),
+    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
   const firstMonth = schedule.rows[0]
   const totalLoanPayments = firstMonth?.loanPaymentsTotal ?? 0

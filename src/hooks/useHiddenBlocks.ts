@@ -33,7 +33,7 @@ function subscribe(listener: () => void) {
   }
 }
 
-export function usePlanHiddenBlocks() {
+export function useHiddenBlocks() {
   const hidden = useSyncExternalStore(subscribe, read, read)
   const toggle = (id: string) => write(hidden.includes(id) ? hidden.filter(h => h !== id) : [...hidden, id])
   const reset = () => write([])

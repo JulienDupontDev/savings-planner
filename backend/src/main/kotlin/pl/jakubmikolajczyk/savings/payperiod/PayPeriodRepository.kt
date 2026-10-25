@@ -46,6 +46,7 @@ class PayPeriodRepository(private val jdbc: NamedParameterJdbcTemplate) {
             periodEnd = rs.getDate("period_end")?.toLocalDate()?.toString(),
             anchorTxId = rs.getLong("anchor_tx_id"),
             isPartial = rs.getBoolean("is_partial"),
+            startOverridden = rs.getBoolean("start_overridden"),
             income = rs.getBigDecimal("income"),
             expense = rs.getBigDecimal("expense"),
             net = rs.getBigDecimal("net"),
@@ -161,8 +162,9 @@ class PayPeriodRepository(private val jdbc: NamedParameterJdbcTemplate) {
     fun anchorTransactions(): List<IncomeAnchorTransaction> =
         jdbc.query(
             """
-                select tx.id, tx.account_id, tx.booked_at
+                select tx.id, tx.account_id, coalesce(override.start_date, tx.booked_at) as booked_at
                 from finance.transactions tx
+                left join finance.pay_period_start_overrides override on override.anchor_tx_id = tx.id
                 join finance.income_anchors anchor
                   on anchor.account_id = tx.account_id
                  and anchor.counterparty = lower(regexp_replace(
@@ -174,7 +176,7 @@ class PayPeriodRepository(private val jdbc: NamedParameterJdbcTemplate) {
                      '[[:space:]]+', ' ', 'g'
                  ))
                 where tx.amount > 0
-                order by tx.account_id, tx.booked_at, tx.id
+                order by tx.account_id, coalesce(override.start_date, tx.booked_at), tx.id
             """.trimIndent(),
         ) { rs, _ ->
             IncomeAnchorTransaction(
@@ -183,6 +185,27 @@ class PayPeriodRepository(private val jdbc: NamedParameterJdbcTemplate) {
                 bookedAt = rs.getDate("booked_at").toLocalDate(),
             )
         }
+
+    fun setStartOverride(anchorTxId: Long, startDate: java.time.LocalDate) {
+        jdbc.update(
+            """
+                insert into finance.pay_period_start_overrides (anchor_tx_id, start_date)
+                values (:id, :startDate)
+                on conflict (anchor_tx_id) do update set start_date = excluded.start_date
+            """.trimIndent(),
+            mapOf("id" to anchorTxId, "startDate" to startDate),
+        )
+    }
+
+    fun clearStartOverride(anchorTxId: Long) {
+        jdbc.update("delete from finance.pay_period_start_overrides where anchor_tx_id = :id", mapOf("id" to anchorTxId))
+    }
+
+    fun findAnchorTxId(accountId: UUID, periodNo: Int): Long? =
+        jdbc.query(
+            "select anchor_tx_id from finance.pay_periods where account_id = :accountId and period_no = :periodNo",
+            mapOf("accountId" to accountId, "periodNo" to periodNo),
+        ) { rs, _ -> rs.getLong("anchor_tx_id") }.firstOrNull()
 
     fun replacePayPeriods(periods: List<CalculatedPayPeriod>) {
         jdbc.update("delete from finance.pay_periods", emptyMap<String, Any>())
@@ -219,6 +242,7 @@ class PayPeriodRepository(private val jdbc: NamedParameterJdbcTemplate) {
                     period.period_end,
                     period.anchor_tx_id,
                     period.is_partial,
+                    (override.anchor_tx_id is not null) as start_overridden,
                     coalesce(sum(case
                         when tx.amount > 0
                          and coalesce(category.cashflow_treatment, 'expense') not in ('internal_transfer', 'savings')
@@ -235,9 +259,10 @@ class PayPeriodRepository(private val jdbc: NamedParameterJdbcTemplate) {
                 left join finance.tx_with_period tx
                   on tx.account_id = period.account_id and tx.period_no = period.period_no
                 left join finance.categories category on category.id = tx.category_id
+                left join finance.pay_period_start_overrides override on override.anchor_tx_id = period.anchor_tx_id
                 $where
                 group by period.period_no, period.account_id, account.name, period.period_start,
-                         period.period_end, period.anchor_tx_id, period.is_partial
+                         period.period_end, period.anchor_tx_id, period.is_partial, override.anchor_tx_id
                 order by period.period_start desc, period.account_id
                 limit :limit
             """.trimIndent(),

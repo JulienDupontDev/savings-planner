@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, type LucideIcon } from 'lucide-react'
 import { translate as t } from '../../i18n'
-import { usePlanHiddenBlocks } from '../../hooks/usePlanBlocks'
+import { useHiddenBlocks } from '../../hooks/useHiddenBlocks'
 
 type Accent = 'assets' | 'plan' | 'settings' | 'overview'
 type Tone = 'neutral' | 'positive' | 'negative' | 'asset' | 'plan'
@@ -90,7 +90,7 @@ export function SectionCard({
   blockId,
 }: SectionCardProps) {
   const [open, setOpen] = useState(defaultOpen)
-  const { hidden } = usePlanHiddenBlocks()
+  const { hidden } = useHiddenBlocks()
   const contentId = `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 
   if (blockId && hidden.includes(blockId)) return null
@@ -135,6 +135,11 @@ export function SectionCard({
       </div>
     </section>
   )
+}
+
+export function HideableBlock({ blockId, children }: { blockId: string; children: ReactNode }) {
+  const { hidden } = useHiddenBlocks()
+  return hidden.includes(blockId) ? null : <>{children}</>
 }
 
 export function StatCard({ label, value, detail, tone = 'neutral' }: StatCardProps) {

@@ -1,3 +1,4 @@
+import type { SecurityState } from './securityBuffers'
 import { buildSchedule } from './allocation'
 import { creditCardStatus } from './creditCard'
 import { translate as t } from '../i18n'
@@ -46,6 +47,7 @@ export function buildNextCycleForecast(
   mortgagePlan?: MortgagePlan,
   subscriptions: Subscription[] = [],
   upcomingExpenses: UpcomingExpense[] = [],
+  securityState?: SecurityState,
 ): NextCycleForecast {
   const schedule = buildSchedule(
     { ...settings, horizonMonths: Math.max(2, settings.horizonMonths) },
@@ -57,6 +59,7 @@ export function buildNextCycleForecast(
     mortgagePlan,
     subscriptions,
     upcomingExpenses,
+    securityState,
   )
   const currentRow = schedule.rows[0]
   const targetRow = schedule.rows[1] ?? currentRow

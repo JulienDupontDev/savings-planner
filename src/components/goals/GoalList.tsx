@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Pencil, Trash2, Plus, Lock } from 'lucide-react'
+import { GripVertical, Pencil, Trash2, Plus, Lock, Star } from 'lucide-react'
 import { useStore } from '../../store'
 import { formatCurrency } from '../../domain/formatting'
 import type { Goal } from '../../domain/types'
@@ -50,6 +50,9 @@ function SortableGoalRow({ goal, onEdit, onRemove }: { goal: Goal; onEdit: () =>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{goal.name}</span>
+          {goal.important && (
+            <Star size={12} className="text-amber-500 shrink-0" title={t('goals.list.importantTooltip')} />
+          )}
           {goal.fixedAllocation && (
             <Lock size={12} className="text-purple-500 shrink-0" title={t('goals.list.fixedAllocationTooltip', { amount: formatCurrency(goal.fixedAllocation, currency) })} />
           )}

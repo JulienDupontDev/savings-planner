@@ -26,6 +26,8 @@ import {
 import { IS_API_MODE } from '../config'
 import { translate as t } from '../i18n'
 import { buildSchedule } from '../domain/allocation'
+import { resolveGoalBalances } from '../domain/goalAccounts'
+import { buildSecurityState } from '../domain/securityBuffers'
 import { earliestSnapshotMonth } from '../domain/accounts'
 import { currentYearMonth } from '../domain/formatting'
 import { createId } from '../domain/id'
@@ -165,6 +167,7 @@ interface AppState extends DataState, SyncState {
   removeIncomeAnchor: (id: number) => Promise<void>
   refreshPayPeriods: () => Promise<PayPeriodRefreshResult>
   updatePayPeriodSettings: (settings: PayPeriodSettings) => Promise<void>
+  updatePayPeriodStart: (period: PayPeriod, startDate?: string) => Promise<void>
   saveMortgagePlan: (plan: Omit<MortgagePlan, 'id'> & { id?: string }) => void
   removeMortgagePlan: () => void
   addSubscription: (subscription: Omit<Subscription, 'id'>) => void
@@ -1125,6 +1128,20 @@ export const useStore = create<AppState>()(
           }
         },
 
+        updatePayPeriodStart: async (period, startDate) => {
+          if (!IS_API_MODE) return
+          set({ syncError: undefined })
+          try {
+            if (startDate) await payPeriodsApi.updateStart(period.accountId, period.periodNo, startDate)
+            else await payPeriodsApi.resetStart(period.accountId, period.periodNo)
+            await get().loadPayPeriods()
+            await get().loadGoalInsights()
+            set({ lastSyncedAt: syncStamp() })
+          } catch (error) {
+            set({ syncError: describeSyncError(error) })
+          }
+        },
+
         updatePayPeriodSettings: async (payPeriodSettings) => {
           if (!IS_API_MODE) return
           set({ payPeriodSettings, syncError: undefined })
@@ -1345,8 +1362,19 @@ export const useStore = create<AppState>()(
         },
 
         getSchedule: () => {
-          const { settings, goals, loans, mortgagePlan, subscriptions, upcomingExpenses, overrides } = get()
-          return buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses)
+          const { settings, goals, loans, mortgagePlan, subscriptions, upcomingExpenses, overrides, accounts, accountSnapshots } = get()
+          return buildSchedule(
+            settings,
+            resolveGoalBalances(goals, accounts, accountSnapshots),
+            loans,
+            overrides,
+            0,
+            0,
+            mortgagePlan,
+            subscriptions,
+            upcomingExpenses,
+            buildSecurityState(settings, accounts, accountSnapshots),
+          )
         },
 
         getWhatIfSchedule: () => {
@@ -1360,10 +1388,12 @@ export const useStore = create<AppState>()(
             overrides,
             whatIfDelta,
             loanOverpayment,
+            accounts,
+            accountSnapshots,
           } = get()
           return buildSchedule(
             settings,
-            goals,
+            resolveGoalBalances(goals, accounts, accountSnapshots),
             loans,
             overrides,
             whatIfDelta,
@@ -1371,6 +1401,7 @@ export const useStore = create<AppState>()(
             mortgagePlan,
             subscriptions,
             upcomingExpenses,
+            buildSecurityState(settings, accounts, accountSnapshots),
           )
         },
       }

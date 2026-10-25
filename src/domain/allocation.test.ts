@@ -125,3 +125,22 @@ describe('buildSchedule — basic allocation', () => {
     expect(rows[0].goalAllocations[0].allocated).toBe(3500)
   })
 })
+
+describe('buildSchedule — security first', () => {
+  const settings: Settings = { ...baseSettings, emergencyFundEnabled: false, horizonMonths: 3 }
+  const goals: Goal[] = [makeGoal({ id: 'g1', name: 'Wakacje', targetAmount: 8000, priority: 1 })]
+
+  it('reserves cash for the starter buffer before funding goals', () => {
+    const { rows } = buildSchedule(settings, goals, noLoans, {}, 0, 0, undefined, [], [], { cushionCurrent: 0, emergencyCurrent: 0 })
+    expect(rows[0].securityAllocated).toBe(4000)
+    expect(rows[0].goalAllocations[0].allocated).toBe(0)
+    expect(rows[1].securityAllocated).toBe(3200)
+    expect(rows[1].goalAllocations[0].allocated).toBe(800)
+  })
+
+  it('does not reserve anything once security is met', () => {
+    const { rows } = buildSchedule(settings, goals, noLoans, {}, 0, 0, undefined, [], [], { cushionCurrent: 40000, emergencyCurrent: 0 })
+    expect(rows[0].securityAllocated).toBe(0)
+    expect(rows[0].goalAllocations[0].allocated).toBe(4000)
+  })
+})
