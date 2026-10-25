@@ -1,5 +1,5 @@
 import { allSnapshotMonths, balanceAsOf } from './accounts'
-import type { Account, AccountBucket, AccountSnapshot, Schedule, Settings } from './types'
+import type { Account, AccountBucket, AccountSnapshot, Schedule, Settings, UpcomingExpense } from './types'
 import { translate as t, translateAccountBucket } from '../i18n'
 
 export type SecurityBufferId = 'emergency_fund' | 'safety_cushion'
@@ -28,11 +28,23 @@ export interface SecurityBuffersModel {
   allMet: boolean
 }
 
-export function committedMonthlyCostBasis(settings: Settings, schedule?: Schedule): number {
+/** Recurring expenses that start after the given month: committed costs the schedule row doesn't include yet. */
+export function pendingRecurringTotal(upcomingExpenses: UpcomingExpense[], yearMonth: string): number {
+  return upcomingExpenses
+    .filter(expense => expense.recurring && expense.targetMonth > yearMonth)
+    .reduce((sum, expense) => sum + expense.amount, 0)
+}
+
+export function committedMonthlyCostBasis(
+  settings: Settings,
+  schedule?: Schedule,
+  upcomingExpenses: UpcomingExpense[] = [],
+): number {
   const first = schedule?.rows[0]
-  return first
+  const recurringPending = pendingRecurringTotal(upcomingExpenses, first?.yearMonth ?? settings.startMonth)
+  return recurringPending + (first
     ? first.expenses + first.subscriptionsTotal + first.loanPaymentsTotal + first.mortgagePaymentTotal
-    : settings.monthlyExpenses
+    : settings.monthlyExpenses)
 }
 
 export function buildSecurityBuffers(
@@ -40,9 +52,10 @@ export function buildSecurityBuffers(
   accounts: Account[],
   snapshots: AccountSnapshot[],
   schedule?: Schedule,
+  upcomingExpenses: UpcomingExpense[] = [],
 ): SecurityBuffersModel {
   const latestMonth = allSnapshotMonths(snapshots).at(-1)
-  const monthlyCostBasis = committedMonthlyCostBasis(settings, schedule)
+  const monthlyCostBasis = committedMonthlyCostBasis(settings, schedule, upcomingExpenses)
   const safetyCushionMonths = settings.safetyCushionMonths ?? 6
   const safetyBuckets = settings.emergencyFundBuckets ?? ['safety_cushion']
   const safetyCurrent = latestMonth ? sumBuckets(accounts, snapshots, latestMonth, safetyBuckets) : 0
@@ -64,7 +77,7 @@ export function buildSecurityBuffers(
       current: safetyCurrent,
       target: monthlyCostBasis * safetyCushionMonths,
       latestMonth,
-      detail: `${formatBucketSubtitle(safetyBuckets)} · cel ${safetyCushionMonths} mies.`,
+      detail: `${formatBucketSubtitle(safetyBuckets)} · ${t('accounts.kpi.targetMonths', { months: safetyCushionMonths })}`,
       focusCopy: t('security.safetyCushionCopy'),
     }),
   ]

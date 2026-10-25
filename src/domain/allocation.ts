@@ -15,6 +15,7 @@ import type {
 } from './types'
 import { addMonths, formatYearMonth, monthDiff, dateToYearMonth } from './formatting'
 import { ikzeMonthlyContributionCost } from './ikze'
+import { gratificationsForMonth } from './gratifications'
 import { buildMortgageSchedule } from './mortgage'
 import {
   DEFAULT_SECURITY_MAX_SHARE_PCT,
@@ -22,7 +23,7 @@ import {
   IMPORTANT_DEFAULT_MONTHS,
   URGENT_DEADLINE_MONTHS,
 } from './paycheckSplit'
-import type { SecurityState } from './securityBuffers'
+import { pendingRecurringTotal, type SecurityState } from './securityBuffers'
 
 interface GoalState {
   goalId: string
@@ -178,7 +179,7 @@ export function buildSchedule(
     settings.startMonth,
     settings.horizonMonths,
   )
-  const subscriptionsTotal = subscriptions
+  const baseSubscriptionsTotal = subscriptions
     .filter(subscription => subscription.active)
     .reduce((sum, subscription) => sum + subscription.monthlyAmount, 0)
   const ikzeContributionTotal = ikzeMonthlyContributionCost(settings)
@@ -195,12 +196,19 @@ export function buildSchedule(
     const override = overrides[yearMonth] ?? {}
     const baseIncome = override.income ?? settings.monthlyIncome
     const expenses = override.expenses ?? settings.monthlyExpenses
+    const recurringExpensesTotal = upcomingExpenses
+      .filter(expense => expense.recurring && expense.targetMonth <= yearMonth)
+      .reduce((sum, expense) => sum + expense.amount, 0)
+    const subscriptionsTotal = baseSubscriptionsTotal + recurringExpensesTotal
     const oneTimeExpensesTotal = upcomingExpenses
-      .filter(expense => !expense.isPaid && expense.targetMonth === yearMonth)
+      .filter(expense => !expense.recurring && !expense.isPaid && expense.targetMonth === yearMonth)
       .reduce((sum, expense) => sum + expense.amount, 0)
     const expensesTotal = expenses + subscriptionsTotal + oneTimeExpensesTotal + ikzeContributionTotal
-    const income = baseIncome + whatIfDelta
-    const grossFreeCash = baseIncome + Math.min(0, whatIfDelta) - expensesTotal
+    const gratification = settings.includeGratificationsInPlan
+      ? gratificationsForMonth(settings.gratifications, yearMonth)
+      : 0
+    const income = baseIncome + gratification + whatIfDelta
+    const grossFreeCash = baseIncome + gratification + Math.min(0, whatIfDelta) - expensesTotal
 
     // Process loans: distribute loanOverpayment to highest-balance loan first
     const loanEntries: LoanMonthEntry[] = []
@@ -237,10 +245,21 @@ export function buildSchedule(
     const bonusPool = Math.max(0, whatIfDelta)
     const manualAlloc = override.perGoalAllocation ?? {}
 
+    // Expected return on the accounts behind each goal: balances grow before the month's contributions.
+    if (i > 0) {
+      for (const goal of sortedGoals) {
+        if (!goal.growthPct) continue
+        const state = states.find(s => s.goalId === goal.id)!
+        state.balance *= Math.pow(1 + goal.growthPct / 100, 1 / 12)
+        state.isComplete = state.balance >= goal.targetAmount
+      }
+    }
+
     let securityAllocated = 0
     if (securityState) {
       if (i === 0) {
         const costBasis = expenses + subscriptionsTotal + totalLoanPayment + mortgagePaymentTotal
+          + pendingRecurringTotal(upcomingExpenses, yearMonth)
         cushionMissing = Math.max(0, costBasis * (settings.safetyCushionMonths ?? 6) - securityState.cushionCurrent)
         emergencyMissing = emergencyEnabled
           ? Math.max(0, (settings.emergencyFundTarget ?? 10000) - securityState.emergencyCurrent)

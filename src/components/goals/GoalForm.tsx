@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Goal } from '../../domain/types'
 import { CurrencyInput } from '../ui/CurrencyInput'
 import { useStore } from '../../store'
+import { goalAccountIds } from '../../domain/goalAccounts'
 import { translate as t } from '../../i18n'
 
 interface Props {
@@ -16,8 +17,10 @@ export function GoalForm({ initial, onSave, onCancel }: Props) {
   const [currentSaved, setCurrentSaved] = useState(initial?.currentSaved ?? 0)
   const [deadline, setDeadline] = useState(initial?.deadline ?? '')
   const [fixedAllocation, setFixedAllocation] = useState(initial?.fixedAllocation ?? 0)
-  const accounts = useStore(s => s.accounts).filter(account => !account.closedAt || account.id === initial?.accountId)
-  const [accountId, setAccountId] = useState(initial?.accountId ?? '')
+  const initialAccountIds = initial ? goalAccountIds(initial as Goal) : []
+  const accounts = useStore(s => s.accounts).filter(account => !account.closedAt || initialAccountIds.includes(account.id))
+  const [accountIds, setAccountIds] = useState<string[]>(initialAccountIds)
+  const [repeatsYearly, setRepeatsYearly] = useState(initial?.repeatsYearly ?? false)
   const [important, setImportant] = useState(initial?.important ?? false)
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -26,11 +29,12 @@ export function GoalForm({ initial, onSave, onCancel }: Props) {
     onSave({
       name: name.trim(),
       targetAmount: target,
-      currentSaved: !accountId && currentSaved > 0 ? currentSaved : undefined,
-      accountId: accountId || undefined,
+      currentSaved: accountIds.length === 0 && currentSaved > 0 ? currentSaved : undefined,
+      accountIds: accountIds.length > 0 ? accountIds : undefined,
       deadline: deadline || undefined,
       fixedAllocation: fixedAllocation > 0 ? fixedAllocation : undefined,
       important: important || undefined,
+      repeatsYearly: repeatsYearly && deadline ? true : undefined,
     })
   }
 
@@ -50,19 +54,24 @@ export function GoalForm({ initial, onSave, onCancel }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <CurrencyInput label={t('goals.form.targetAmount')} value={target} onChange={setTarget} />
-        {!accountId && <CurrencyInput label={t('goals.form.alreadySaved')} value={currentSaved} onChange={setCurrentSaved} />}
+        {accountIds.length === 0 && <CurrencyInput label={t('goals.form.alreadySaved')} value={currentSaved} onChange={setCurrentSaved} />}
       </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('goals.form.linkedAccount')}</label>
-        <select
-          value={accountId}
-          onChange={e => setAccountId(e.target.value)}
-          className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">{t('goals.form.noLinkedAccount')}</option>
-          {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
-        </select>
+        <div className="flex flex-col gap-1 rounded-lg border border-gray-200 p-2 dark:border-gray-600">
+          {accounts.length === 0 && <span className="text-xs text-gray-400">{t('goals.form.noLinkedAccount')}</span>}
+          {accounts.map(account => (
+            <label key={account.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={accountIds.includes(account.id)}
+                onChange={e => setAccountIds(current => e.target.checked ? [...current, account.id] : current.filter(id => id !== account.id))}
+              />
+              {account.name}
+            </label>
+          ))}
+        </div>
         <p className="text-xs text-gray-400">{t('goals.form.linkedAccountHelp')}</p>
       </div>
 
@@ -77,6 +86,11 @@ export function GoalForm({ initial, onSave, onCancel }: Props) {
           className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <p className="text-xs text-gray-400">{t('goals.form.deadlineHelp')}</p>
+        <label className={`mt-1 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 ${deadline ? '' : 'opacity-50'}`}>
+          <input type="checkbox" disabled={!deadline} checked={repeatsYearly && !!deadline} onChange={e => setRepeatsYearly(e.target.checked)} />
+          {t('goals.form.repeatsYearly')}
+        </label>
+        <p className="text-xs text-gray-400">{t('goals.form.repeatsYearlyHelp')}</p>
       </div>
 
       <div>

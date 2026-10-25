@@ -117,6 +117,7 @@ data class AccountDto(
     @field:NotBlank val currency: String = "PLN",
     val openedAt: String? = null,
     val closedAt: String? = null,
+    val annualReturnPct: BigDecimal? = null,
 )
 
 data class AccountSnapshotDto(
@@ -170,6 +171,7 @@ data class UpcomingExpenseDto(
     @field:Positive val amount: BigDecimal,
     @field:NotBlank val targetMonth: String,
     val isPaid: Boolean = false,
+    val recurring: Boolean = false,
 )
 
 data class GoalDto(
@@ -181,8 +183,9 @@ data class GoalDto(
     val fixedAllocation: BigDecimal? = null,
     val currentSaved: BigDecimal? = BigDecimal.ZERO,
     val important: Boolean = false,
-    // Konto, z którego saldo (ostatni snapshot) zastępuje currentSaved.
-    val accountId: UUID? = null,
+    val repeatsYearly: Boolean = false,
+    // Konta, których salda (ostatni snapshot) razem zastępują currentSaved.
+    val accountIds: List<UUID> = emptyList(),
 )
 
 data class MortgageOneTimeOverpaymentDto(
@@ -236,6 +239,13 @@ data class IkzePlanEntryDto(
     @field:Min(0) val payoutsLeft: Int = 0,
 )
 
+data class GratificationDto(
+    @field:NotBlank val id: String,
+    @field:NotBlank val name: String,
+    @field:NotNull val yearlyAmount: BigDecimal = BigDecimal.ZERO,
+    val payoutMonths: List<Int> = emptyList(),
+)
+
 data class SettingsDto(
     @field:NotNull val monthlyIncome: BigDecimal,
     @field:NotNull val monthlyExpenses: BigDecimal,
@@ -254,6 +264,9 @@ data class SettingsDto(
     @field:Min(0) @field:Max(100) val securityMaxSharePct: Int? = null,
     @field:Valid val ikzePlans: List<IkzePlanEntryDto> = emptyList(),
     val includeIkzeContributionsInCashflow: Boolean = false,
+    // Szacowane gratyfikacje roczne (premie); includeGratificationsInPlan = tryb podglądu. JSONB blob, brak migracji.
+    @field:Valid val gratifications: List<GratificationDto> = emptyList(),
+    val includeGratificationsInPlan: Boolean = false,
     // Tracker karty kredytowej; null => karta nieskonfigurowana. JSONB blob, brak migracji.
     @field:Valid val creditCard: CreditCardDto? = null,
 )

@@ -25,6 +25,17 @@ const snapshots: AccountSnapshot[] = [
 ]
 
 describe('security buffers', () => {
+  it('includes recurring expenses in the cost basis, even when they start after the first month', () => {
+    const schedule = {
+      rows: [{ yearMonth: '2026-01', expenses: 3000, subscriptionsTotal: 100, loanPaymentsTotal: 0, mortgagePaymentTotal: 0 }],
+    } as unknown as Schedule
+    const expenses = [
+      { id: 'a', name: 'Assurance', amount: 200, targetMonth: '2026-03', isPaid: false, recurring: true },
+      { id: 'b', name: 'Ponctuel', amount: 900, targetMonth: '2026-03', isPaid: false },
+    ]
+    expect(committedMonthlyCostBasis(settings, schedule, expenses)).toBe(3300)
+  })
+
   it('omits the emergency fund buffer when disabled in settings', () => {
     const model = buildSecurityBuffers({ ...settings, emergencyFundEnabled: false }, accounts, snapshots)
     expect(model.buffers.map(buffer => buffer.id)).toEqual(['safety_cushion'])
@@ -64,5 +75,11 @@ describe('security buffers', () => {
       status: 'missing',
       priority: 1,
     })
+  })
+
+  it('translates the configured safety cushion month count', () => {
+    const model = buildSecurityBuffers({ ...settings, safetyCushionMonths: 4 }, accounts, snapshots)
+
+    expect(model.buffers.find(buffer => buffer.id === 'safety_cushion')?.detail).toContain('objectif : 4 mois')
   })
 })

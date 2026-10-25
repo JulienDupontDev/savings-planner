@@ -5,6 +5,7 @@ import { SUPPORTED_CURRENCIES } from '../../domain/currency'
 import { currentYearMonth } from '../../domain/formatting'
 import { useStore } from '../../store'
 import { ImportCsvDialog } from '../accounts/ImportCsvDialog'
+import { GratificationsSettings } from './GratificationsSettings'
 import { translate as t } from '../../i18n'
 
 export function AdvancedSettings() {
@@ -219,8 +220,10 @@ export function AdvancedSettings() {
             }}
             className="rounded-md border border-gray-200 bg-white px-3 py-2 text-right text-gray-900 tabular-nums focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
           />
-        </div>}
+                </div>}
       </div>
+
+      <GratificationsSettings />
 
       <div className="flex flex-wrap gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
         <button

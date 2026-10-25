@@ -23,7 +23,7 @@ export function NextBestActionPanel({ schedule }: { schedule: Schedule }) {
 
   const { action, split } = useMemo(() => {
     const forecast = buildNextCycleForecast(settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses)
-    const security = buildSecurityBuffers(settings, accounts, snapshots, schedule)
+    const security = buildSecurityBuffers(settings, accounts, snapshots, schedule, upcomingExpenses)
     return {
       action: buildNextBestAction({ forecast, security, settings, goals }),
       split: buildPaycheckSplit({

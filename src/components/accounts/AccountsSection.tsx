@@ -40,7 +40,7 @@ export function AccountsSection() {
   // Cele KPI: poduszka = N miesięcy realnych kosztów (jak na Przeglądzie), fundusz = stała kwota.
   const { safetyCushionTarget, emergencyFundTarget, safetyCushionMonths } = useMemo(() => {
     const schedule = buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses)
-    const monthlyCosts = committedMonthlyCostBasis(settings, schedule)
+    const monthlyCosts = committedMonthlyCostBasis(settings, schedule, upcomingExpenses)
     const months = settings.safetyCushionMonths ?? 6
     return {
       safetyCushionMonths: months,

@@ -27,6 +27,7 @@ import { IS_API_MODE } from '../config'
 import { translate as t } from '../i18n'
 import { buildSchedule } from '../domain/allocation'
 import { resolveGoalBalances } from '../domain/goalAccounts'
+import { expandRecurringGoals } from '../domain/recurringGoals'
 import { buildSecurityState } from '../domain/securityBuffers'
 import { earliestSnapshotMonth } from '../domain/accounts'
 import { currentYearMonth } from '../domain/formatting'
@@ -1365,7 +1366,7 @@ export const useStore = create<AppState>()(
           const { settings, goals, loans, mortgagePlan, subscriptions, upcomingExpenses, overrides, accounts, accountSnapshots } = get()
           return buildSchedule(
             settings,
-            resolveGoalBalances(goals, accounts, accountSnapshots),
+            resolveGoalBalances(expandRecurringGoals(goals, settings), accounts, accountSnapshots),
             loans,
             overrides,
             0,
@@ -1393,7 +1394,7 @@ export const useStore = create<AppState>()(
           } = get()
           return buildSchedule(
             settings,
-            resolveGoalBalances(goals, accounts, accountSnapshots),
+            resolveGoalBalances(expandRecurringGoals(goals, settings), accounts, accountSnapshots),
             loans,
             overrides,
             whatIfDelta,

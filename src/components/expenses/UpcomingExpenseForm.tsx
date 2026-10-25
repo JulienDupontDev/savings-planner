@@ -15,6 +15,7 @@ export function UpcomingExpenseForm({ initial, onSave, onCancel }: Props) {
   const [amount, setAmount] = useState(initial?.amount ?? 0)
   const [targetMonth, setTargetMonth] = useState(initial?.targetMonth ?? currentYearMonth())
   const [isPaid, setIsPaid] = useState(initial?.isPaid ?? false)
+  const [recurring, setRecurring] = useState(initial?.recurring ?? false)
 
   const valid = name.trim() && amount > 0 && targetMonth
 
@@ -42,7 +43,7 @@ export function UpcomingExpenseForm({ initial, onSave, onCancel }: Props) {
         />
         <div>
           <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-            {t('common.labels.month')}
+            {recurring ? t('expenses.form.startMonth') : t('common.labels.month')}
           </label>
           <input
             type="month"
@@ -51,16 +52,29 @@ export function UpcomingExpenseForm({ initial, onSave, onCancel }: Props) {
             className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300">
-          <input
-            type="checkbox"
-            checked={isPaid}
-            onChange={e => setIsPaid(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          {t('expenses.form.paid')}
-        </label>
+        {!recurring && (
+          <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={isPaid}
+              onChange={e => setIsPaid(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            {t('expenses.form.paid')}
+          </label>
+        )}
       </div>
+
+      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+        <input
+          type="checkbox"
+          checked={recurring}
+          onChange={e => setRecurring(e.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+        {t('expenses.form.recurring')}
+      </label>
+      {recurring && <p className="text-xs text-gray-400">{t('expenses.form.recurringHelp')}</p>}
 
       <div className="flex gap-2 justify-end">
         <button
@@ -70,7 +84,7 @@ export function UpcomingExpenseForm({ initial, onSave, onCancel }: Props) {
           {t('common.actions.cancel')}
         </button>
         <button
-          onClick={() => valid && onSave({ name: name.trim(), amount, targetMonth, isPaid })}
+          onClick={() => valid && onSave({ name: name.trim(), amount, targetMonth, isPaid: recurring ? false : isPaid, recurring: recurring || undefined })}
           disabled={!valid}
           className="text-xs px-3 py-1.5 rounded-md bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
         >

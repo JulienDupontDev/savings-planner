@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, Circle, Pencil, Plus, Trash2 } from 'lucide-react'
+import { CheckCircle2, Circle, Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
 import { formatCurrency, formatYearMonth } from '../../domain/formatting'
 import { useDefaultCurrency } from '../../hooks/useDefaultCurrency'
 import type { UpcomingExpense } from '../../domain/types'
@@ -72,11 +72,13 @@ function UpcomingExpenseRow({
   onToggle: () => void
 }) {
   const currency = useDefaultCurrency()
-  const paidClass = expense.isPaid ? 'opacity-55' : ''
+  const paidClass = expense.isPaid && !expense.recurring ? 'opacity-55' : ''
 
   return (
     <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${paidClass}`}>
-      <button
+      {expense.recurring ? (
+        <span className="p-1.5 text-sky-500" title={t('expenses.list.recurringTooltip')}><Repeat size={15} /></span>
+      ) : <button
         onClick={onToggle}
         className={`p-1.5 rounded-md transition-colors ${
           expense.isPaid
@@ -86,12 +88,14 @@ function UpcomingExpenseRow({
         title={expense.isPaid ? t('expenses.list.markUnpaid') : t('expenses.list.markPaid')}
       >
         {expense.isPaid ? <CheckCircle2 size={15} /> : <Circle size={15} />}
-      </button>
+      </button>}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{expense.name}</p>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          {formatCurrency(expense.amount, currency)} · {formatYearMonth(expense.targetMonth)}
-          {expense.isPaid && t('expenses.list.paidSuffix')}
+          {expense.recurring
+            ? t('expenses.list.recurringLine', { amount: formatCurrency(expense.amount, currency), month: formatYearMonth(expense.targetMonth) })
+            : <>{formatCurrency(expense.amount, currency)} · {formatYearMonth(expense.targetMonth)}</>}
+          {expense.isPaid && !expense.recurring && t('expenses.list.paidSuffix')}
         </p>
       </div>
       <div className="flex gap-1 shrink-0">

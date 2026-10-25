@@ -664,7 +664,7 @@ function useOverviewModel() {
   const activeGoalIds = new Set(goals.filter(goal => (goal.currentSaved ?? 0) < goal.targetAmount).map(goal => goal.id))
   const nextGoals = schedule.goalProgress.filter(goal => activeGoalIds.has(goal.goalId)).slice(0, 4)
   const nextExpenses = upcomingExpenses
-    .filter(expense => !expense.isPaid)
+    .filter(expense => !expense.isPaid && !expense.recurring)
     .sort((a, b) => a.targetMonth.localeCompare(b.targetMonth))
     .slice(0, 4)
   const bucketLabel = emergencyBuckets.length > 0

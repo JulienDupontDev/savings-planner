@@ -10,7 +10,8 @@ export function SecurityBufferFocus({ schedule }: { schedule: Schedule }) {
   const currency = settings.defaultCurrency ?? 'PLN'
   const accounts = useStore(s => s.accounts)
   const snapshots = useStore(s => s.accountSnapshots)
-  const model = buildSecurityBuffers(settings, accounts, snapshots, schedule)
+  const upcomingExpenses = useStore(s => s.upcomingExpenses)
+  const model = buildSecurityBuffers(settings, accounts, snapshots, schedule, upcomingExpenses)
   const needsFocus = model.missingBuffers.length > 0
   const Icon = needsFocus ? ShieldAlert : ShieldCheck
 

@@ -144,3 +144,27 @@ describe('buildSchedule — security first', () => {
     expect(rows[0].goalAllocations[0].allocated).toBe(4000)
   })
 })
+
+describe('buildSchedule — recurring upcoming expenses', () => {
+  it('counts a recurring expense every month from its start month, like a subscription', () => {
+    const { rows } = buildSchedule(
+      { ...baseSettings, horizonMonths: 4 }, [], noLoans, {}, 0, 0, undefined, [],
+      [{ id: 'e', name: 'Assurance', amount: 100, targetMonth: '2026-02', isPaid: false, recurring: true }],
+    )
+    expect(rows.map(r => r.subscriptionsTotal)).toEqual([0, 100, 100, 100])
+    expect(rows.every(r => r.oneTimeExpensesTotal === 0)).toBe(true)
+    expect(rows[2].freeCash).toBe(3900)
+  })
+})
+
+describe('buildSchedule — account growth', () => {
+  it('grows the balance of a goal with an expected return, so less has to be contributed', () => {
+    const base = makeGoal({ id: 'g1', name: 'Maison', targetAmount: 100000, currentSaved: 10000, fixedAllocation: 1000 })
+    const settings: Settings = { ...baseSettings, horizonMonths: 13 }
+    const flat = buildSchedule(settings, [base], noLoans, {})
+    const grown = buildSchedule(settings, [{ ...base, growthPct: 12 }], noLoans, {})
+    expect(grown.rows[0].goalAllocations[0].balanceAfter).toBe(flat.rows[0].goalAllocations[0].balanceAfter)
+    const last = (s: typeof flat) => s.rows[12].goalAllocations[0].balanceAfter
+    expect(last(grown)).toBeGreaterThan(last(flat) + 1000)
+  })
+})

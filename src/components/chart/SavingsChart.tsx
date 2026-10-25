@@ -58,6 +58,7 @@ export function SavingsChart() {
   const [perspective, setPerspective] = useState<ProjectionPerspective | undefined>()
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | undefined>()
+  const [selectedYear, setSelectedYear] = useState('')
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     whatIf: true,
     deadlines: true,
@@ -86,7 +87,7 @@ export function SavingsChart() {
   )
   const model = useMemo(
     () => {
-      const security = buildSecurityBuffers(settings, accounts, snapshots, schedule)
+      const security = buildSecurityBuffers(settings, accounts, snapshots, schedule, upcomingExpenses)
       return buildProjectionDashboardModel({
         schedule,
         whatIfSchedule,
@@ -97,7 +98,7 @@ export function SavingsChart() {
         hasWhatIf,
       })
     },
-    [settings, accounts, snapshots, schedule, whatIfSchedule, goals, loans, goalInsights, hasWhatIf],
+    [settings, accounts, snapshots, schedule, whatIfSchedule, goals, loans, goalInsights, hasWhatIf, upcomingExpenses],
   )
 
   const knownIds = useMemo(() => new Set([...model.goals.map(goal => goal.id), ...model.debts.map(debt => debt.id)]), [model.goals, model.debts])
@@ -107,13 +108,16 @@ export function SavingsChart() {
   const visibleDebts = visibleDebtItems(model.debts, activePerspective, activeSelectedId)
   const visibleMonths = new Set(schedule.rows.map(row => row.yearMonth))
   const upcomingMarkers = upcomingExpenses
-    .filter(expense => !expense.isPaid && visibleMonths.has(expense.targetMonth))
+    .filter(expense => !expense.isPaid && !expense.recurring && visibleMonths.has(expense.targetMonth))
     .sort((a, b) => a.targetMonth.localeCompare(b.targetMonth))
   const data = useMemo(
     () => buildChartPoints(schedule, whatIfSchedule, goals, loans, model.goals, model.debts),
     [schedule, whatIfSchedule, goals, loans, model.goals, model.debts],
   )
-  const tickInterval = Math.max(1, Math.floor(data.length / 10))
+  const years = useMemo(() => [...new Set(data.map(point => point.yearMonth.slice(0, 4)))], [data])
+  const activeYear = years.includes(selectedYear) ? selectedYear : ''
+  const visibleData = activeYear ? data.filter(point => point.yearMonth.startsWith(`${activeYear}-`)) : data
+  const tickInterval = Math.max(1, Math.floor(visibleData.length / 10))
 
   if (model.goals.length === 0 && loans.length === 0 && upcomingMarkers.length === 0) {
     return <p className="py-8 text-center text-sm text-gray-400">{t('projectionChart.empty')}</p>
@@ -133,7 +137,10 @@ export function SavingsChart() {
         perspective={activePerspective}
         layers={layers}
         hasWhatIf={hasWhatIf}
+        years={years}
+        selectedYear={activeYear}
         onPerspectiveChange={setPerspective}
+        onYearChange={setSelectedYear}
         onLayerToggle={key => setLayers(current => ({ ...current, [key]: !current[key] }))}
       />
 
@@ -149,7 +156,7 @@ export function SavingsChart() {
 
       <div className="min-h-[340px]">
         <ResponsiveContainer width="100%" height={340}>
-          <ComposedChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+          <ComposedChart data={visibleData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={tickInterval - 1} className="fill-gray-500" />
             <YAxis tickFormatter={v => `${Math.round(Number(v) / 1000)}k`} tick={{ fontSize: 11 }} width={42} className="fill-gray-500" />
@@ -362,13 +369,19 @@ function ProjectionToolbar({
   perspective,
   layers,
   hasWhatIf,
+  years,
+  selectedYear,
   onPerspectiveChange,
+  onYearChange,
   onLayerToggle,
 }: {
   perspective: ProjectionPerspective
   layers: Record<LayerKey, boolean>
   hasWhatIf: boolean
+  years: string[]
+  selectedYear: string
   onPerspectiveChange: (perspective: ProjectionPerspective) => void
+  onYearChange: (year: string) => void
   onLayerToggle: (key: LayerKey) => void
 }) {
   return (
@@ -393,6 +406,19 @@ function ProjectionToolbar({
           </button>
         ))}
       </div>
+
+      <label className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+        <span>{t('projectionChart.yearFilter')}</span>
+        <select
+          value={selectedYear}
+          onChange={event => onYearChange(event.target.value)}
+          aria-label={t('projectionChart.yearFilterAriaLabel')}
+          className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+        >
+          <option value="">{t('projectionChart.allYears')}</option>
+          {years.map(year => <option key={year} value={year}>{year}</option>)}
+        </select>
+      </label>
 
       <div className="flex flex-wrap gap-2">
         <LayerButton active={layers.whatIf && hasWhatIf} disabled={!hasWhatIf} label={t('projectionChart.scenarioLayer')} onClick={() => onLayerToggle('whatIf')} />

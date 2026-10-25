@@ -81,6 +81,7 @@ fun AccountEntity.toDto() = AccountDto(
     currency = currency,
     openedAt = openedAt?.toYearMonth(),
     closedAt = closedAt?.toYearMonth(),
+    annualReturnPct = annualReturnPct,
 )
 
 fun AccountDto.toEntity(existing: AccountEntity? = null) = (existing ?: AccountEntity()).also {
@@ -126,6 +127,7 @@ fun AccountDto.toEntity(existing: AccountEntity? = null) = (existing ?: AccountE
     it.currency = currency
     it.openedAt = openedAt?.toMonthStart()
     it.closedAt = closedAt?.toMonthStart()
+    it.annualReturnPct = annualReturnPct
 }
 
 fun AccountSnapshotEntity.toDto() = AccountSnapshotDto(
@@ -211,6 +213,7 @@ fun UpcomingExpenseEntity.toDto() = UpcomingExpenseDto(
     amount = amount,
     targetMonth = targetMonth.toYearMonth(),
     isPaid = isPaid,
+    recurring = recurring,
 )
 
 fun UpcomingExpenseDto.toEntity(existing: UpcomingExpenseEntity? = null) = (existing ?: UpcomingExpenseEntity()).also {
@@ -219,6 +222,7 @@ fun UpcomingExpenseDto.toEntity(existing: UpcomingExpenseEntity? = null) = (exis
     it.amount = amount
     it.targetMonth = targetMonth.toMonthStart()
     it.isPaid = isPaid
+    it.recurring = recurring
 }
 
 fun GoalEntity.toDto() = GoalDto(
@@ -230,7 +234,8 @@ fun GoalEntity.toDto() = GoalDto(
     fixedAllocation = fixedAllocation,
     currentSaved = currentSaved,
     important = important,
-    accountId = accountId,
+    repeatsYearly = repeatsYearly,
+    accountIds = accountIds.toList(),
 )
 
 fun GoalDto.toEntity(existing: GoalEntity? = null) = (existing ?: GoalEntity()).also {
@@ -242,5 +247,7 @@ fun GoalDto.toEntity(existing: GoalEntity? = null) = (existing ?: GoalEntity()).
     it.fixedAllocation = fixedAllocation
     it.currentSaved = currentSaved
     it.important = important
-    it.accountId = accountId
+    it.repeatsYearly = repeatsYearly
+    it.accountIds.clear()
+    it.accountIds.addAll(accountIds)
 }

@@ -33,6 +33,7 @@ export function AccountForm({ initial, defaultCurrency = 'PLN', onSave, onCancel
   const [name, setName] = useState(initial?.name ?? '')
   const [bucket, setBucket] = useState<AccountBucket>(initial?.bucket ?? 'accounts')
   const [currency, setCurrency] = useState(initial?.currency ?? defaultCurrency)
+  const [annualReturn, setAnnualReturn] = useState(initial?.annualReturnPct !== undefined ? String(initial.annualReturnPct) : '')
 
   const handleSubmit = (e: React.FormEvent) => {
     /*
@@ -51,11 +52,12 @@ export function AccountForm({ initial, defaultCurrency = 'PLN', onSave, onCancel
       name: name.trim(),
       bucket,
       currency: currency.trim() || defaultCurrency,
+      annualReturnPct: Number.isFinite(parseFloat(annualReturn)) && parseFloat(annualReturn) !== 0 ? parseFloat(annualReturn) : undefined,
     })
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-[1fr_220px_120px_auto_auto] md:items-end">
+    <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-[1fr_220px_120px_150px_auto_auto] md:items-end">
       <div className="flex flex-col gap-1">
         <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('accounts.form.name')}</label>
         <input
@@ -95,6 +97,21 @@ export function AccountForm({ initial, defaultCurrency = 'PLN', onSave, onCancel
             <option key={item.code} value={item.code}>{item.code}</option>
           ))}
         </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide" title={t('accounts.form.annualReturnHelp')}>{t('accounts.form.annualReturn')}</label>
+        <input
+          type="number"
+          step="0.1"
+          min={-100}
+          max={100}
+          value={annualReturn}
+          onChange={e => setAnnualReturn(e.target.value)}
+          placeholder="0"
+          title={t('accounts.form.annualReturnHelp')}
+          className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-right text-gray-900 dark:text-gray-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
       </div>
 
       <button

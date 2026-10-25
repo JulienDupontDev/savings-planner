@@ -1,7 +1,9 @@
 package pl.jakubmikolajczyk.savings.entity
 
 import com.fasterxml.jackson.databind.JsonNode
+import jakarta.persistence.CollectionTable
 import jakarta.persistence.Column
+import jakarta.persistence.ElementCollection
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
 import jakarta.persistence.Id
@@ -65,6 +67,8 @@ class AccountEntity(
     var openedAt: LocalDate? = null,
     @Column(name = "closed_at")
     var closedAt: LocalDate? = null,
+    @Column(name = "annual_return_pct")
+    var annualReturnPct: BigDecimal? = null,
     @Column(name = "created_at", insertable = false, updatable = false)
     /*
      * `insertable = false, updatable = false` tells Hibernate: the database owns this column.
@@ -157,6 +161,7 @@ class UpcomingExpenseEntity(
     var targetMonth: LocalDate = LocalDate.now(),
     @Column(name = "is_paid")
     var isPaid: Boolean = false,
+    var recurring: Boolean = false,
 )
 
 @Entity
@@ -174,8 +179,12 @@ class GoalEntity(
     @Column(name = "current_saved")
     var currentSaved: BigDecimal? = BigDecimal.ZERO,
     var important: Boolean = false,
+    @Column(name = "repeats_yearly")
+    var repeatsYearly: Boolean = false,
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "goal_accounts", schema = "finance", joinColumns = [JoinColumn(name = "goal_id")])
     @Column(name = "account_id")
-    var accountId: UUID? = null,
+    var accountIds: MutableSet<UUID> = mutableSetOf(),
 )
 
 @Entity

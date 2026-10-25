@@ -185,6 +185,8 @@
     "form": {
       "name": "Nom du compte",
       "namePlaceholder": "Ex. compte courant, IKE, XTB",
+      "annualReturn": "Rendement annuel (%)",
+      "annualReturnHelp": "Gain annuel attendu sur ce compte. S’il est lié à un objectif, la projection tient compte de cette croissance : il faut verser moins.",
       "bucket": "Catégorie",
       "currency": "Devise"
     },
@@ -274,9 +276,11 @@
       "optionalDeadline": "Échéance (facultative)",
       "deadlineHelp": "Indiquez une date si vous en avez une ; elle influe sur la priorité d’affectation.",
       "monthlyFixedAllocation": "Montant mensuel fixe (facultatif)",
-      "linkedAccount": "Compte lié",
-      "noLinkedAccount": "Aucun (montant saisi à la main)",
-      "linkedAccountHelp": "Le montant épargné est lu automatiquement dans le dernier solde de ce compte : il suffit de saisir les soldes du mois. Si plusieurs objectifs partagent un compte, le solde est réparti par priorité.",
+      "repeatsYearly": "Se répète chaque année",
+      "repeatsYearlyHelp": "Crée un objectif identique par an, à la même date, jusqu’à la fin de la période du budget (réglages). Le montant épargné et les comptes liés ne comptent que pour la première année.",
+      "linkedAccount": "Comptes liés",
+      "noLinkedAccount": "Aucun compte (montant saisi à la main)",
+      "linkedAccountHelp": "Le montant épargné est la somme des derniers soldes des comptes cochés (épargne, comptes d’entreprise…) : il suffit de saisir les soldes du mois. Si plusieurs objectifs partagent un compte, le solde est réparti par priorité.",
       "important": "Objectif important",
       "importantHelp": "Financé dès que le matelas de départ est couvert, avant le reste de la sécurité. Sans échéance, l’effort est lissé sur 12 mois. Les échéances à moins de 6 mois sont traitées ainsi automatiquement.",
       "monthlyFixedHelp": "Ce montant sera toujours affecté à cet objectif. Le reste sera réparti entre les autres objectifs."
@@ -285,6 +289,7 @@
       "dragHandle": "Faire glisser",
       "fixedAllocationTooltip": "Montant fixe : {{amount}}/mois",
       "deadline": "· échéance : {{date}}",
+      "repeatsYearlyTooltip": "Se répète chaque année sur toute la période du budget",
       "importantTooltip": "Objectif important : prioritaire juste après le matelas de départ",
       "fixedMonthly": "· {{amount}}/mois (fixe)",
       "reorderHelp": "Faites glisser les objectifs pour modifier leur priorité. Le n° 1 est prioritaire ; les montants fixes sont affectés en premier.",
@@ -332,13 +337,18 @@
       "name": "Nom de la dépense",
       "namePlaceholder": "Ex. assurance auto",
       "paid": "Payé",
+      "recurring": "Dépense récurrente (chaque mois, comme un abonnement)",
+      "recurringHelp": "Comptée chaque mois à partir du mois choisi, sans date de fin, comme un abonnement.",
+      "startMonth": "À partir de",
       "add": "Ajouter une dépense"
     },
     "list": {
       "addUpcoming": "Ajouter une dépense à venir",
       "markUnpaid": "Marquer comme impayé",
       "markPaid": "Marquer comme payé",
-      "paidSuffix": " · payé"
+      "paidSuffix": " · payé",
+      "recurringTooltip": "Dépense récurrente",
+      "recurringLine": "{{amount}}/mois · depuis {{month}}"
     }
   },
   "subscriptions": {
@@ -700,6 +710,9 @@
     "fullCycles": "{{count}} cycles complets",
     "scenario": "(scénario)",
     "all": "Tout",
+    "yearFilter": "Année",
+    "yearFilterAriaLabel": "Filtrer le graphique par année",
+    "allYears": "Toutes les années",
     "deadlines": "Échéances",
     "expenses": "Dépenses",
     "noGoals": "Aucun objectif actif.",
@@ -825,6 +838,18 @@
     "securityStarterMonths": "Matelas de départ financé à 100 % (mois de dépenses)",
     "securityMaxSharePct": "Part max. du reste versée à la sécurité (%)",
     "emergencyFundEnabled": "Prévoir un fonds d’urgence distinct (en plus de l’épargne de précaution)",
+    "gratifications": {
+      "title": "Gratifications estimées",
+      "help": "Part variable de votre rémunération (primes liées à des objectifs). Elle n’abaisse jamais l’objectif de sécurité.",
+      "name": "Nom (ex. Prime sur objectifs)",
+      "amount": "Montant annuel estimé ({{currency}})",
+      "payoutMonths": "Mois de versement :",
+      "add": "Ajouter",
+      "remove": "Supprimer la gratification",
+      "summary": "{{amount}} / an · versée en {{months}}",
+      "preview": "Mode aperçu : inclure ces gratifications dans le plan",
+      "previewHelp": "Désactivé par défaut : le plan ne compte pas dessus. Activé, {{total}} / an sont ajoutés aux revenus des mois de versement et répartis selon les priorités habituelles."
+    },
     "emergencyFundTarget": "Objectif du fonds d’urgence ({{currency}})",
     "defaultCurrency": "Devise par défaut des nouveaux comptes",
     "defaultCurrencyHelp": "Utilisée lors de la création ou de l’import de comptes. Les soldes existants ne sont pas convertis.",
