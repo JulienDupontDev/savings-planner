@@ -63,7 +63,7 @@ Cross-domain podsumowanie: **Net worth (duża liczba) + delta m/m**, KPI (Suma m
 - AdvancedSettings: horyzont/start, bazowe income/expenses, export/import, reset, status sync/backend.
 - (Konfiguracja bucketów: kontekstowo w Majątku; tu ewentualny skrót.)
 
-**Nawigacja techniczna:** lekki tab state. Rekomendacja: **hash routing** (`#/majatek`, `#/plan`...) na `window.location.hash` + `hashchange` — deep-link i back button, bez biblioteki routera. Albo `useState` jeśli wolisz prościej (ale tracisz tab po reloadzie). Bez dodawania react-router (zbędny ciężar).
+**Nawigacja techniczna:** lekki tab state. Rekomendacja: **hash routing** (`#/assets`, `#/plan`...) na `window.location.hash` + `hashchange` — deep-link i back button, bez biblioteki routera. Albo `useState` jeśli wolisz prościej (ale tracisz tab po reloadzie). Bez dodawania react-router (zbędny ciężar).
 
 ---
 

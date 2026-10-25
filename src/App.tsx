@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   CreditCard,
   Database,
+  FileText,
   FileUp,
   Home,
   LayoutDashboard,
@@ -44,6 +45,7 @@ import { PayPeriodsSection } from './components/payperiods/PayPeriodsSection'
 import { ScheduleTable } from './components/schedule/ScheduleTable'
 import { SubscriptionList, SubscriptionTotal } from './components/subscriptions/SubscriptionList'
 import { AdvancedSettings } from './components/ui/AdvancedSettings'
+import { WealthReportExport } from './components/report/WealthReportExport'
 import { HideableBlock, PageHeader, SectionCard, StatCard, surface } from './components/ui/Layout'
 import { allSnapshotMonths, balanceAsOf, totalAssetsAsOf } from './domain/accounts'
 import { buildSchedule } from './domain/allocation'
@@ -52,9 +54,9 @@ import { periodKey } from './domain/payPeriods'
 import type { Account, AccountBucket, AccountSnapshot } from './domain/types'
 import { BACKEND_MODE, IS_API_MODE } from './config'
 import { translateAccountBucket, useT } from './i18n'
+import { canonicalHash, hashForTab, tabFromHash, type AppTab } from './routes'
 import { useStore } from './store'
 
-type AppTab = 'overview' | 'assets' | 'plan' | 'transactions' | 'settings'
 type AppIcon = typeof LayoutDashboard
 
 const TABS: Array<{ id: AppTab; label: string; icon: AppIcon }> = [
@@ -64,28 +66,6 @@ const TABS: Array<{ id: AppTab; label: string; icon: AppIcon }> = [
   { id: 'transactions', label: 'app.navigation.transactions', icon: Tags },
   { id: 'settings', label: 'app.navigation.settings', icon: Settings },
 ]
-
-const TAB_HASH: Record<AppTab, string> = {
-  overview: '#/przeglad',
-  assets: '#/majatek',
-  plan: '#/plan',
-  transactions: '#/transakcje',
-  settings: '#/ustawienia',
-}
-
-const HASH_TAB: Record<string, AppTab> = {
-  '#/przeglad': 'overview',
-  '#/': 'overview',
-  '#/majatek': 'assets',
-  '#/plan': 'plan',
-  '#/transakcje': 'transactions',
-  '#/ustawienia': 'settings',
-}
-
-function tabFromHash() {
-  if (typeof window === 'undefined') return 'overview'
-  return HASH_TAB[window.location.hash] ?? 'overview'
-}
 
 function tabNeedsAccountSnapshots(tab: AppTab) {
   return tab === 'overview' || tab === 'assets' || tab === 'plan'
@@ -98,7 +78,9 @@ export default function App() {
   const hasHydratedFromBackend = useStore(s => s.hasHydratedFromBackend)
   const syncError = useStore(s => s.syncError)
   const lastSyncedAt = useStore(s => s.lastSyncedAt)
-  const [activeTab, setActiveTab] = useState<AppTab>(tabFromHash)
+  const [activeTab, setActiveTab] = useState<AppTab>(() => (
+    typeof window === 'undefined' ? 'overview' : tabFromHash(window.location.hash)
+  ))
 
   useEffect(() => {
     if (IS_API_MODE && !hasHydratedFromBackend && !isHydrating) {
@@ -107,10 +89,17 @@ export default function App() {
   }, [activeTab, hasHydratedFromBackend, hydrateFromBackend, isHydrating])
 
   useEffect(() => {
-    const handleHashChange = () => setActiveTab(tabFromHash())
+    const handleHashChange = () => {
+      const tab = tabFromHash(window.location.hash)
+      const canonicalRoute = canonicalHash(window.location.hash)
+      if (window.location.hash !== canonicalRoute) {
+        window.history.replaceState(null, '', canonicalRoute)
+      }
+      setActiveTab(tab)
+    }
     window.addEventListener('hashchange', handleHashChange)
     window.addEventListener('popstate', handleHashChange)
-    if (!window.location.hash) window.history.replaceState(null, '', TAB_HASH.overview)
+    handleHashChange()
     return () => {
       window.removeEventListener('hashchange', handleHashChange)
       window.removeEventListener('popstate', handleHashChange)
@@ -118,7 +107,7 @@ export default function App() {
   }, [])
 
   const navigate = (tab: AppTab) => {
-    window.history.pushState(null, '', TAB_HASH[tab])
+    window.history.pushState(null, '', hashForTab(tab))
     setActiveTab(tab)
   }
 
@@ -560,6 +549,9 @@ function SettingsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title={t('app.settings.title')} description={t('app.settings.description')} icon={Settings} accent="settings" />
+      <SectionCard title={t('report.settingsTitle')} icon={FileText} accent="settings">
+        <WealthReportExport />
+      </SectionCard>
       <SectionCard title={t('app.settings.configuration')} icon={ShieldCheck} accent="settings">
         <AdvancedSettings />
       </SectionCard>

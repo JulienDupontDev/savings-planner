@@ -859,6 +859,136 @@
     "resetAll": "Réinitialiser toutes les données",
     "resetDescription": "Supprime les objectifs, comptes, crédits, paramètres et remplacements du stockage local."
   },
+  "report": {
+    "settingsTitle": "Rapport patrimonial (PDF)",
+    "settingsDescription": "Un résumé clair de votre situation : patrimoine, objectifs, dettes et prévisions, avec des graphiques. Pensé pour être compris sans connaître l’application.",
+    "download": "Télécharger le rapport PDF",
+    "generating": "Génération…",
+    "error": "Impossible de générer le rapport PDF.",
+    "fileName": "rapport-patrimonial-{{date}}.pdf",
+    "title": "Rapport patrimonial",
+    "subtitle": "Établi le {{date}}",
+    "subtitleWithMonth": "Établi le {{date}} – dernier relevé : {{month}}",
+    "headline": {
+      "good": "Tout va bien : vous êtes sur la bonne voie.",
+      "watch": "Globalement correct, quelques points demandent de l’attention.",
+      "alert": "Attention : vos dépenses dépassent vos revenus ce mois-ci."
+    },
+    "highlights": {
+      "netWorth": "Votre patrimoine net est de {{netWorth}} ({{assets}} d’actifs moins {{debt}} de dettes).",
+      "yearChange": "Les actifs ont {{direction}} de {{amount}} en un an.",
+      "monthChange": "Les actifs ont {{direction}} de {{amount}} depuis le mois dernier.",
+      "increased": "augmenté",
+      "decreased": "diminué",
+      "noSnapshots": "Aucun solde de compte n’est encore saisi : le patrimoine ne peut pas être calculé.",
+      "securityMet": "Votre épargne de sécurité couvre environ {{months}} mois de dépenses : objectifs de sécurité atteints.",
+      "securityMissing": "Votre épargne de sécurité couvre environ {{months}} mois de dépenses : objectifs de sécurité pas encore atteints.",
+      "freeCashPositive": "Chaque mois, il reste environ {{amount}} après toutes les dépenses, à répartir entre vos objectifs.",
+      "freeCashNegative": "Chaque mois, il manque environ {{amount}} pour couvrir toutes les dépenses.",
+      "goals": "Objectifs : {{done}} atteint(s), {{active}} en cours.",
+      "goalsLate": "Objectifs : {{done}} atteint(s), {{active}} en cours, dont {{late}} en retard sur la date souhaitée.",
+      "goalsNext": "Le plus avancé : « {{name}} » ({{pct}} %).",
+      "mortgage": "Prêt immobilier : fin prévue en {{payoff}}, il reste {{balance}} à rembourser.",
+      "noDebt": "Vous n’avez aucune dette enregistrée."
+    },
+    "kpi": {
+      "netWorth": "Patrimoine net",
+      "netWorthDetail": "actifs − dettes",
+      "assets": "Actifs",
+      "assetsDetail": "vs mois dernier : {{delta}}",
+      "debt": "Dettes",
+      "debtDetail": "crédits + immobilier",
+      "noDebt": "aucune",
+      "freeCash": "Reste par mois",
+      "freeCashDetail": "en {{month}}"
+    },
+    "history": {
+      "title": "Évolution des actifs",
+      "description": "Total de vos comptes à la fin de chaque mois (24 derniers mois au maximum).",
+      "change12": "Variation sur 12 mois : {{amount}}",
+      "notEnoughData": "Pas assez de données pour tracer une courbe."
+    },
+    "allocation": {
+      "title": "Répartition du patrimoine",
+      "description": "Où se trouve votre argent aujourd’hui.",
+      "empty": "Aucun solde enregistré.",
+      "account": "Compte",
+      "category": "Catégorie",
+      "balance": "Solde"
+    },
+    "security": {
+      "title": "Épargne de sécurité",
+      "descriptionMonths": "Votre réserve couvre environ {{months}} mois de dépenses.",
+      "description": "Réserve à garder pour les imprévus."
+    },
+    "budget": {
+      "title": "Budget mensuel",
+      "description": "Revenus et dépenses prévus pour {{month}}.",
+      "item": "Poste",
+      "amount": "Montant / mois",
+      "income": "Revenus",
+      "living": "Dépenses courantes",
+      "subscriptions": "Abonnements",
+      "oneTime": "Dépenses ponctuelles",
+      "loans": "Crédits",
+      "mortgage": "Prêt immobilier",
+      "retirement": "Épargne retraite",
+      "freeCash": "Reste disponible"
+    },
+    "goals": {
+      "title": "Objectifs",
+      "description": "Où vous en êtes et quand chaque objectif devrait être atteint.",
+      "empty": "Aucun objectif défini.",
+      "reached": "Atteint",
+      "notPlanned": "Non planifié",
+      "outsideHorizon": "{{month}} (au-delà de l’horizon)",
+      "expected": "Date prévue : {{eta}}",
+      "deadline": "échéance souhaitée : {{deadline}}",
+      "late": "EN RETARD",
+      "lateShortfall": "EN RETARD (il faudrait {{amount}} de plus par mois)",
+      "onTrack": "dans les temps"
+    },
+    "debts": {
+      "title": "Dettes",
+      "description": "Ce qu’il reste à rembourser et quand vous serez libérés.",
+      "value": "Valeur",
+      "balance": "Capital restant dû",
+      "monthly": "Mensualité",
+      "rate": "Taux annuel",
+      "payoff": "Fin prévue",
+      "beyondHorizon": "Au-delà de l’horizon",
+      "remainingMonths": "Mois restants",
+      "interestLeft": "Intérêts restant à payer",
+      "interestSaved": "Intérêts économisés (surpaiements)",
+      "loan": "Crédit",
+      "remaining": "Reste dû",
+      "end": "Fin",
+      "curve": "Évolution prévue du total des dettes :"
+    },
+    "retirement": {
+      "title": "Épargne retraite",
+      "description": "Versements de l’année par rapport au plafond fiscal.",
+      "owner": "Titulaire",
+      "year": "Année",
+      "limit": "Plafond",
+      "contributed": "Versé",
+      "remaining": "Reste"
+    },
+    "upcoming": {
+      "title": "Grosses dépenses à venir",
+      "name": "Dépense",
+      "month": "Mois",
+      "amount": "Montant"
+    },
+    "help": {
+      "title": "Comment lire ce rapport",
+      "horizon": "Les projections couvrent {{months}} mois à partir de {{start}}.",
+      "source": "Les revenus et dépenses sont ceux saisis dans l’application ; les soldes viennent du dernier relevé enregistré.",
+      "estimate": "Les projections sont des estimations, pas des garanties : elles ne tiennent pas compte de l’inflation ni des imprévus."
+    },
+    "footer": "Savings Planner – Rapport patrimonial du {{date}}",
+    "page": "Page {{page}} / {{total}}"
+  },
   "store": {
     "syncErrorFallback": "Impossible de synchroniser les données avec le serveur.",
     "syncError": "Erreur de synchronisation : {{message}}",

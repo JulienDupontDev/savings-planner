@@ -161,7 +161,16 @@ export function SavingsChart() {
             <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={tickInterval - 1} className="fill-gray-500" />
             <YAxis tickFormatter={v => `${Math.round(Number(v) / 1000)}k`} tick={{ fontSize: 11 }} width={42} className="fill-gray-500" />
             <Tooltip
-              formatter={(value: unknown, name: unknown) => [formatCurrency(value, currency), tooltipName(String(name), goals, loans, model.goals)]}
+              formatter={(value: unknown, name: unknown, item: { payload?: ChartPoint }) => {
+                const key = String(name)
+                const index = data.findIndex(point => point.yearMonth === item.payload?.yearMonth)
+                const previous = index > 0 ? data[index - 1][key] : undefined
+                const delta = typeof value === 'number' && typeof previous === 'number' ? value - previous : undefined
+                const text = delta === undefined || delta === 0
+                  ? formatCurrency(value, currency)
+                  : `${formatCurrency(value, currency)} (${delta > 0 ? '+' : '−'}${formatCurrency(Math.abs(delta), currency)})`
+                return [text, tooltipName(key, goals, loans, model.goals)]
+              }}
               contentStyle={{ fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}
               labelFormatter={label => String(label ?? '')}
             />
