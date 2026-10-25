@@ -5,6 +5,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
 import pl.jakubmikolajczyk.savings.dto.FreeCashCycleDto
+import java.math.BigDecimal
 import java.sql.ResultSet
 import java.util.UUID
 
@@ -66,8 +67,8 @@ class GoalIntegrationRepository(private val jdbc: NamedParameterJdbcTemplate) {
         )
     }
 
-    fun listGoalInputs(): List<GoalPaceInput> =
-        jdbc.query(
+    fun listGoalInputs(): List<GoalPaceInput> {
+        val goals = jdbc.query(
             """
                 select id, name, target_amount, coalesce(current_saved, 0) as current_saved, priority, fixed_allocation
                 from finance.goals
@@ -83,4 +84,36 @@ class GoalIntegrationRepository(private val jdbc: NamedParameterJdbcTemplate) {
                 fixedAllocation = rs.getBigDecimal("fixed_allocation"),
             )
         }
+
+        val links = jdbc.query(
+            "select goal_id, account_id from finance.goal_accounts order by account_id",
+            emptyMap<String, Any>(),
+        ) { rs, _ -> rs.getObject("goal_id", UUID::class.java) to rs.getObject("account_id", UUID::class.java) }
+            .groupBy({ it.first }, { it.second })
+        if (links.isEmpty()) return goals
+
+        val balances = jdbc.query(
+            """
+                select distinct on (account_id) account_id, balance
+                from finance.account_snapshots
+                order by account_id, snapshot_date desc
+            """.trimIndent(),
+            emptyMap<String, Any>(),
+        ) { rs, _ -> rs.getObject("account_id", UUID::class.java) to rs.getBigDecimal("balance").max(BigDecimal.ZERO) }
+            .toMap()
+            .toMutableMap()
+
+        // Linked goals draw on their accounts' latest balances by priority, so a shared account is never counted twice.
+        return goals.map { goal ->
+            val accountIds = links[goal.goalId] ?: return@map goal
+            var saved = BigDecimal.ZERO
+            for (accountId in accountIds) {
+                val available = balances[accountId] ?: BigDecimal.ZERO
+                val take = available.min((goal.targetAmount - saved).max(BigDecimal.ZERO))
+                balances[accountId] = available - take
+                saved += take
+            }
+            goal.copy(currentSaved = saved)
+        }
+    }
 }

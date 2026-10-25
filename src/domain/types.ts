@@ -40,8 +40,9 @@ export interface UpcomingExpense {
   id: string
   name: string
   amount: number
-  targetMonth: string // "YYYY-MM"
+  targetMonth: string // "YYYY-MM" — month of the expense, or first month when recurring
   isPaid: boolean
+  recurring?: boolean // charged every month from targetMonth, counted like a subscription
 }
 
 // Karta kredytowa — tracker informacyjny (wariant 1).
@@ -72,6 +73,7 @@ export interface Account {
   currency: string
   openedAt?: string // "YYYY-MM" - miesiac pierwszego snapshota
   closedAt?: string // "YYYY-MM" - undefined = aktywne; po tej dacie saldo = 0
+  annualReturnPct?: number // expected yearly growth in percent (investments); drives the projection of linked goals
 }
 
 export interface AccountSnapshot {
@@ -167,6 +169,7 @@ export interface PayPeriod {
   periodEnd?: string
   anchorTxId: number
   isPartial: boolean
+  startOverridden?: boolean
   income: number
   expense: number
   net: number
@@ -357,6 +360,11 @@ export interface Goal {
   priority: number  // lower = higher priority (1 is first)
   fixedAllocation?: number // fixed PLN/month regardless of priority calc
   currentSaved?: number // already saved before tracking started
+  growthPct?: number // derived from linked accounts' expected return; applied to the goal balance each month
+  repeatsYearly?: boolean // needs a deadline: the goal is repeated every year until the end of the budget horizon
+  accountIds?: string[] // linked accounts: their latest balances replace currentSaved
+  accountId?: string // legacy single link, read as accountIds
+  important?: boolean // monthly need is funded right after the security starter buffer
 }
 
 export type IkzeParticipantRole = 'employee' | 'entrepreneur'
@@ -372,16 +380,29 @@ export interface IkzePlanEntry {
   payoutsLeft: number
 }
 
+export interface Gratification {
+  id: string
+  name: string
+  yearlyAmount: number // estimated total per year, split evenly over payoutMonths
+  payoutMonths: number[] // calendar months (1-12) in which it is paid, e.g. [1, 3]
+}
+
 export interface Settings {
   monthlyIncome: number
   monthlyExpenses: number
   startMonth: string // "YYYY-MM" format
   horizonMonths: number
+  defaultCurrency?: string
   emergencyFundBuckets: AccountBucket[]
   safetyCushionMonths?: number  // cel poduszki = tyle miesięcy kosztów (domyślnie 6)
+  emergencyFundEnabled?: boolean // false => brak osobnego funduszu awaryjnego, tylko poduszka (domyślnie true)
   emergencyFundTarget?: number  // cel funduszu awaryjnego — stała kwota (domyślnie 10000)
+  securityStarterMonths?: number // months of costs funded 100% into security first (default 1)
+  securityMaxSharePct?: number // share of remaining cash going to security after the starter buffer (default 60)
   ikzePlans?: IkzePlanEntry[]
   includeIkzeContributionsInCashflow?: boolean
+  gratifications?: Gratification[] // estimated variable pay (bonuses), never lowers the security target
+  includeGratificationsInPlan?: boolean // preview mode: false (default) keeps them out of the plan
   creditCard?: CreditCard // tracker karty kredytowej; brak => karta nieskonfigurowana
 }
 
@@ -406,6 +427,7 @@ export interface MonthRow {
   mortgagePaymentTotal: number
   ikzeContributionTotal: number
   freeCash: number
+  securityAllocated?: number // part of the free cash reserved for security buffers before goals
   goalAllocations: GoalAllocation[]
   loanEntries: LoanMonthEntry[]
   mortgageEntry?: MortgageMonthEntry

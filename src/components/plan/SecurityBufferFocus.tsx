@@ -1,21 +1,24 @@
 import { ShieldAlert, ShieldCheck } from 'lucide-react'
 import { buildSecurityBuffers } from '../../domain/securityBuffers'
-import { formatPLN, formatYearMonth } from '../../domain/formatting'
+import { formatCurrency, formatYearMonth } from '../../domain/formatting'
 import type { Schedule } from '../../domain/types'
 import { useStore } from '../../store'
+import { translate as t } from '../../i18n'
 
 export function SecurityBufferFocus({ schedule }: { schedule: Schedule }) {
   const settings = useStore(s => s.settings)
+  const currency = settings.defaultCurrency ?? 'PLN'
   const accounts = useStore(s => s.accounts)
   const snapshots = useStore(s => s.accountSnapshots)
-  const model = buildSecurityBuffers(settings, accounts, snapshots, schedule)
+  const upcomingExpenses = useStore(s => s.upcomingExpenses)
+  const model = buildSecurityBuffers(settings, accounts, snapshots, schedule, upcomingExpenses)
   const needsFocus = model.missingBuffers.length > 0
   const Icon = needsFocus ? ShieldAlert : ShieldCheck
 
   if (!model.latestMonth) {
     return (
       <div className="rounded-md border border-dashed border-gray-200 px-4 py-4 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
-        Brak snapshotów kont. Poduszka i fundusz awaryjny pojawią się w Planie po uzupełnieniu Majątku.
+        {t('security.noSnapshots')}
       </div>
     )
   }
@@ -31,18 +34,18 @@ export function SecurityBufferFocus({ schedule }: { schedule: Schedule }) {
           <Icon size={18} className={needsFocus ? 'mt-0.5 text-amber-600 dark:text-amber-300' : 'mt-0.5 text-emerald-600 dark:text-emerald-300'} />
           <div>
             <h3 className="text-sm font-semibold text-gray-950 dark:text-gray-50">
-              {needsFocus ? 'Priorytet 1: odbuduj bezpieczeństwo' : 'Bezpieczeństwo finansowe domknięte'}
+              {needsFocus ? t('security.priorityTitle') : t('security.completeTitle')}
             </h3>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
               {needsFocus
-                ? 'Elo mordo, na tym trzeba się skupić dla spokoju ducha i rodziny zanim gonimy mniej krytyczne cele.'
-                : 'Poduszka i fundusz awaryjny są powyżej celu. Można spokojniej patrzeć na kolejne cele.'}
+                ? t('security.priorityDescription')
+                : t('security.completeDescription')}
             </p>
           </div>
         </div>
         <div className="text-right text-xs text-gray-500 dark:text-gray-400">
-          <p>Snapshot {formatYearMonth(model.latestMonth)}</p>
-          <p>Baza kosztów {formatPLN(model.monthlyCostBasis)}/mies.</p>
+          <p>{t('security.snapshotMonth', { month: formatYearMonth(model.latestMonth) })}</p>
+          <p>{t('security.costBasis', { amount: formatCurrency(model.monthlyCostBasis, currency) })}</p>
         </div>
       </div>
 
@@ -55,7 +58,7 @@ export function SecurityBufferFocus({ schedule }: { schedule: Schedule }) {
                   <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">{buffer.title}</p>
                   {buffer.status === 'missing' && (
                     <span className="rounded-sm bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                      Priorytet 1
+                      {t('security.priorityBadge')}
                     </span>
                   )}
                 </div>
@@ -64,7 +67,7 @@ export function SecurityBufferFocus({ schedule }: { schedule: Schedule }) {
               <div className="text-right">
                 <p className="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">{buffer.progressPct}%</p>
                 <p className={buffer.status === 'missing' ? 'text-xs tabular-nums text-amber-700 dark:text-amber-300' : 'text-xs text-emerald-700 dark:text-emerald-300'}>
-                  {buffer.status === 'missing' ? `brakuje ${formatPLN(buffer.missing)}` : 'cel osiągnięty'}
+                  {buffer.status === 'missing' ? t('security.missingAmount', { amount: formatCurrency(buffer.missing, currency) }) : t('security.goalReached')}
                 </p>
               </div>
             </div>
@@ -75,7 +78,7 @@ export function SecurityBufferFocus({ schedule }: { schedule: Schedule }) {
               />
             </div>
             <p className="mt-1 text-xs tabular-nums text-gray-500 dark:text-gray-400">
-              {formatPLN(buffer.current)} / {formatPLN(buffer.target)}
+              {formatCurrency(buffer.current, currency)} / {formatCurrency(buffer.target, currency)}
             </p>
           </div>
         ))}

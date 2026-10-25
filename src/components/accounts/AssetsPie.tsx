@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
-import { allSnapshotMonths, balanceAsOf, BUCKET_LABELS, isActiveInMonth } from '../../domain/accounts'
-import { formatPLN, formatYearMonth } from '../../domain/formatting'
+import { allSnapshotMonths, balanceAsOf, isActiveInMonth } from '../../domain/accounts'
+import { formatCurrency, formatYearMonth } from '../../domain/formatting'
 import type { Account, AccountBucket, AccountSnapshot } from '../../domain/types'
+import { translate as t, translateAccountBucket } from '../../i18n'
+import { useDefaultCurrency } from '../../hooks/useDefaultCurrency'
 
 interface Props {
   accounts: Account[]
@@ -13,6 +15,7 @@ const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#db2777', '#7c3aed', '#0891b2'
 
 export function AssetsPie({ accounts, snapshots }: Props) {
   const [mode, setMode] = useState<'bucket' | 'account'>('bucket')
+  const defaultCurrency = useDefaultCurrency()
   const latestMonth = allSnapshotMonths(snapshots).at(-1)
 
   const data = useMemo(() => {
@@ -31,6 +34,7 @@ export function AssetsPie({ accounts, snapshots }: Props) {
         key: account.id,
         name: account.name,
         value: balance,
+        currency: account.currency,
       }))
     }
 
@@ -41,10 +45,11 @@ export function AssetsPie({ accounts, snapshots }: Props) {
 
     return [...byBucket.entries()].map(([bucket, value]) => ({
       key: bucket,
-      name: BUCKET_LABELS[bucket],
+      name: translateAccountBucket(bucket),
       value,
+      currency: defaultCurrency,
     }))
-  }, [accounts, latestMonth, mode, snapshots])
+  }, [accounts, defaultCurrency, latestMonth, mode, snapshots])
 
   const total = data.reduce((sum, item) => sum + item.value, 0)
 
@@ -54,21 +59,21 @@ export function AssetsPie({ accounts, snapshots }: Props) {
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Struktura majątku</h3>
-          <p className="text-xs text-gray-400 dark:text-gray-500">{formatYearMonth(latestMonth)} · suma {formatPLN(total)}</p>
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{t('accounts.chart.assetsStructure')}</h3>
+          <p className="text-xs text-gray-400 dark:text-gray-500">{formatYearMonth(latestMonth)} · {t('accounts.chart.total')} {formatCurrency(total, defaultCurrency)}</p>
         </div>
         <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-0.5 text-xs">
           <button
             onClick={() => setMode('bucket')}
             className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'bucket' ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-950' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
           >
-            Buckety
+            {t('accounts.chart.buckets')}
           </button>
           <button
             onClick={() => setMode('account')}
             className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'account' ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-950' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
           >
-            Konta
+            {t('common.labels.account')}
           </button>
         </div>
       </div>
@@ -91,10 +96,10 @@ export function AssetsPie({ accounts, snapshots }: Props) {
               ))}
             </Pie>
             <Tooltip
-              formatter={(value: unknown, name: unknown) => {
+              formatter={(value: unknown, name: unknown, item) => {
                 const numeric = Number(value ?? 0)
                 const percent = total > 0 ? (numeric / total) * 100 : 0
-                return [`${formatPLN(numeric)} (${percent.toFixed(1)}%)`, String(name)]
+                return [`${formatCurrency(numeric, item.payload.currency)} (${percent.toFixed(1)}%)`, String(name)]
               }}
               contentStyle={{ fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}
             />

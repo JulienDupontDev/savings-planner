@@ -213,6 +213,14 @@ export const categoryRulesApi = {
 }
 
 export const transactionsApi = {
+  create: (transaction: {
+    accountId: string
+    bookedAt: string
+    amount: number
+    description: string
+    counterparty?: string
+    categoryId?: number
+  }) => post<BankTransaction>('/transactions', transaction),
   list: (options: { accountId?: string; periodNo?: number; onlyUncategorized?: boolean; categoryId?: number; limit?: number } = {}) => {
     const params = new URLSearchParams()
     if (options.accountId) params.set('accountId', options.accountId)
@@ -248,6 +256,10 @@ export const payPeriodsApi = {
     return get<PayPeriod[]>(`/pay-periods${query ? `?${query}` : ''}`)
   },
   refresh: () => post<PayPeriodRefreshResult>('/pay-periods/refresh', {}),
+  updateStart: (accountId: string, periodNo: number, startDate: string) =>
+    put<PayPeriodRefreshResult>(`/pay-periods/${accountId}/${periodNo}/start`, { startDate }),
+  resetStart: (accountId: string, periodNo: number) =>
+    del(`/pay-periods/${accountId}/${periodNo}/start`),
   settings: () => get<PayPeriodSettings>('/pay-periods/settings'),
   updateSettings: (settings: PayPeriodSettings) => put<PayPeriodSettings>('/pay-periods/settings', settings),
 }

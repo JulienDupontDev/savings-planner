@@ -64,7 +64,7 @@ describe('buildNextBestAction', () => {
     expect(action.confidence).toBe('high')
   })
 
-  it('tops up the missing security buffer before IKZE and manual goals', () => {
+  it('funds IKZE before the missing security buffer and manual goals', () => {
     const action = buildNextBestAction({
       forecast: forecast(2200),
       security: security(3000),
@@ -83,12 +83,11 @@ describe('buildNextBestAction', () => {
       goals,
     })
 
-    expect(action.kind).toBe('top_up_security_buffer')
-    expect(action.amount).toBe(2200)
-    expect(action.targetName).toBe('Fundusz awaryjny')
+    expect(action.kind).toBe('fund_ikze')
+    expect(action.amount).toBe(1000)
   })
 
-  it('recommends IKZE after security is met', () => {
+  it('recommends IKZE when security is met', () => {
     const action = buildNextBestAction({
       forecast: forecast(2500),
       security: security(0),
@@ -138,7 +137,22 @@ describe('buildNextBestAction', () => {
 
     expect(action.kind).toBe('hold_surplus')
     expect(action.confidence).toBe('low')
-    expect(action.reasons[0]).toContain('snapshot')
+    expect(action.reasons[0]).toContain('réserves')
+  })
+
+  it('formats recommendation amounts with the configured default currency', () => {
+    const action = buildNextBestAction({
+      forecast: forecast(2500),
+      security: {
+        ...security(0),
+        latestMonth: undefined,
+        allMet: false,
+      },
+      settings: { ...settings, defaultCurrency: 'EUR' },
+      goals,
+    })
+
+    expect(action.effects[0]).toContain('€')
   })
 
   it('keeps surplus available when no target needs money', () => {

@@ -6,6 +6,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
 import org.springframework.mock.web.MockMultipartFile
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
@@ -40,6 +42,40 @@ class IngestControllerIntegrationTest @Autowired constructor(
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.inserted").value(0))
             .andExpect(jsonPath("$.skipped").value(3))
+    }
+
+    @Test
+    fun `manually entered salary is saved and offered as a pay period anchor`() {
+        val account = accounts.save(AccountEntity(name = "Everyday", bucket = "accounts", currency = "EUR"))
+
+        mockMvc.perform(
+            post("/api/transactions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                        {
+                          "accountId": "${account.id}",
+                          "bookedAt": "2026-10-25",
+                          "amount": 3200.00,
+                          "description": "Monthly salary",
+                          "counterparty": "Example employer"
+                        }
+                    """.trimIndent(),
+                )
+                .header("X-Api-Token", "test-token"),
+        )
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.source").value("manual"))
+            .andExpect(jsonPath("$.currency").value("EUR"))
+            .andExpect(jsonPath("$.amount").value(3200.0))
+
+        mockMvc.perform(
+            get("/api/income-anchors/candidates")
+                .header("X-Api-Token", "test-token"),
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$[0].counterparty").value("example employer"))
+            .andExpect(jsonPath("$[0].transactionCount").value(1))
     }
 
     private fun performAliorImport(accountId: String) =

@@ -1,10 +1,14 @@
+import { useSecurityState } from './hooks/useSecurityState'
+import { useResolvedGoals } from './hooks/useResolvedGoals'
 import { useEffect, useMemo, useState } from 'react'
+import { useHiddenBlocks } from './hooks/useHiddenBlocks'
 import {
   BarChart3,
   CalendarClock,
   CircleDollarSign,
   CreditCard,
   Database,
+  FileText,
   FileUp,
   Home,
   LayoutDashboard,
@@ -33,66 +37,50 @@ import { IkzePlanner } from './components/ikze/IkzePlanner'
 import { IngestSection } from './components/ingest/IngestSection'
 import { LeakAnalysisSection } from './components/leakanalysis/LeakAnalysisSection'
 import { LoanList } from './components/loans/LoanList'
+import { ManualTransactionForm } from './components/transactions/ManualTransactionForm'
 import { MortgageSection } from './components/mortgage/MortgageSection'
 import { NextBestActionPanel } from './components/plan/NextBestActionPanel'
 import { SecurityBufferFocus } from './components/plan/SecurityBufferFocus'
 import { PayPeriodsSection } from './components/payperiods/PayPeriodsSection'
 import { ScheduleTable } from './components/schedule/ScheduleTable'
-import { SubscriptionList } from './components/subscriptions/SubscriptionList'
+import { SubscriptionList, SubscriptionTotal } from './components/subscriptions/SubscriptionList'
 import { AdvancedSettings } from './components/ui/AdvancedSettings'
-import { PageHeader, SectionCard, StatCard, surface } from './components/ui/Layout'
-import { allSnapshotMonths, balanceAsOf, BUCKET_LABELS, totalAssetsAsOf } from './domain/accounts'
+import { WealthReportExport } from './components/report/WealthReportExport'
+import { HideableBlock, PageHeader, SectionCard, StatCard, surface } from './components/ui/Layout'
+import { allSnapshotMonths, balanceAsOf, totalAssetsAsOf } from './domain/accounts'
 import { buildSchedule } from './domain/allocation'
-import { formatPLN, formatYearMonth } from './domain/formatting'
+import { formatCurrency, formatYearMonth } from './domain/formatting'
 import { periodKey } from './domain/payPeriods'
 import type { Account, AccountBucket, AccountSnapshot } from './domain/types'
 import { BACKEND_MODE, IS_API_MODE } from './config'
+import { translateAccountBucket, useT } from './i18n'
+import { canonicalHash, hashForTab, tabFromHash, type AppTab } from './routes'
 import { useStore } from './store'
 
-type AppTab = 'overview' | 'assets' | 'plan' | 'transactions' | 'settings'
 type AppIcon = typeof LayoutDashboard
 
 const TABS: Array<{ id: AppTab; label: string; icon: AppIcon }> = [
-  { id: 'overview', label: 'Przegląd', icon: LayoutDashboard },
-  { id: 'assets', label: 'Majątek', icon: WalletCards },
-  { id: 'plan', label: 'Plan', icon: BarChart3 },
-  { id: 'transactions', label: 'Transakcje', icon: Tags },
-  { id: 'settings', label: 'Ustawienia', icon: Settings },
+  { id: 'overview', label: 'app.navigation.overview', icon: LayoutDashboard },
+  { id: 'assets', label: 'app.navigation.assets', icon: WalletCards },
+  { id: 'plan', label: 'app.navigation.plan', icon: BarChart3 },
+  { id: 'transactions', label: 'app.navigation.transactions', icon: Tags },
+  { id: 'settings', label: 'app.navigation.settings', icon: Settings },
 ]
-
-const TAB_HASH: Record<AppTab, string> = {
-  overview: '#/przeglad',
-  assets: '#/majatek',
-  plan: '#/plan',
-  transactions: '#/transakcje',
-  settings: '#/ustawienia',
-}
-
-const HASH_TAB: Record<string, AppTab> = {
-  '#/przeglad': 'overview',
-  '#/': 'overview',
-  '#/majatek': 'assets',
-  '#/plan': 'plan',
-  '#/transakcje': 'transactions',
-  '#/ustawienia': 'settings',
-}
-
-function tabFromHash() {
-  if (typeof window === 'undefined') return 'overview'
-  return HASH_TAB[window.location.hash] ?? 'overview'
-}
 
 function tabNeedsAccountSnapshots(tab: AppTab) {
   return tab === 'overview' || tab === 'assets' || tab === 'plan'
 }
 
 export default function App() {
+  const t = useT()
   const hydrateFromBackend = useStore(s => s.hydrateFromBackend)
   const isHydrating = useStore(s => s.isHydrating)
   const hasHydratedFromBackend = useStore(s => s.hasHydratedFromBackend)
   const syncError = useStore(s => s.syncError)
   const lastSyncedAt = useStore(s => s.lastSyncedAt)
-  const [activeTab, setActiveTab] = useState<AppTab>(tabFromHash)
+  const [activeTab, setActiveTab] = useState<AppTab>(() => (
+    typeof window === 'undefined' ? 'overview' : tabFromHash(window.location.hash)
+  ))
 
   useEffect(() => {
     if (IS_API_MODE && !hasHydratedFromBackend && !isHydrating) {
@@ -101,10 +89,17 @@ export default function App() {
   }, [activeTab, hasHydratedFromBackend, hydrateFromBackend, isHydrating])
 
   useEffect(() => {
-    const handleHashChange = () => setActiveTab(tabFromHash())
+    const handleHashChange = () => {
+      const tab = tabFromHash(window.location.hash)
+      const canonicalRoute = canonicalHash(window.location.hash)
+      if (window.location.hash !== canonicalRoute) {
+        window.history.replaceState(null, '', canonicalRoute)
+      }
+      setActiveTab(tab)
+    }
     window.addEventListener('hashchange', handleHashChange)
     window.addEventListener('popstate', handleHashChange)
-    if (!window.location.hash) window.history.replaceState(null, '', TAB_HASH.overview)
+    handleHashChange()
     return () => {
       window.removeEventListener('hashchange', handleHashChange)
       window.removeEventListener('popstate', handleHashChange)
@@ -112,27 +107,27 @@ export default function App() {
   }, [])
 
   const navigate = (tab: AppTab) => {
-    window.history.pushState(null, '', TAB_HASH[tab])
+    window.history.pushState(null, '', hashForTab(tab))
     setActiveTab(tab)
   }
 
   const syncLabel = IS_API_MODE
     ? syncError
-      ? 'Sync wymaga uwagi'
+      ? t('common.status.syncNeedsAttention')
       : lastSyncedAt
-        ? `Sync ${new Date(lastSyncedAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}`
+        ? t('common.status.syncedAt', { time: new Date(lastSyncedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) })
         : isHydrating
-          ? 'Ładowanie danych'
-          : 'Tryb API'
-    : 'Tryb lokalny'
+          ? t('common.status.loadingData')
+          : t('common.status.apiMode')
+    : t('common.status.localMode')
 
   return (
     <div className="min-h-screen bg-[#f6f6f4] text-gray-950 dark:bg-[#101113] dark:text-gray-50">
       {IS_API_MODE && isHydrating && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/80 dark:bg-gray-950/80">
           <div className="rounded-md border border-gray-200 bg-white px-5 py-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Ładuję dane z backendu...</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Zustand działa teraz jako cache aplikacji.</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('common.status.loadingBackend')}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t('common.status.zustandCache')}</p>
           </div>
         </div>
       )}
@@ -144,7 +139,7 @@ export default function App() {
               <TrendingUp size={18} className="text-gray-700 dark:text-gray-200" />
               <div>
                 <p className="font-display text-[0.95rem] font-semibold tracking-tight text-gray-950 dark:text-gray-50">Savings Planner</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Lokalny plan finansów</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('app.brand.subtitle')}</p>
               </div>
             </div>
 
@@ -170,7 +165,7 @@ export default function App() {
                 <TrendingUp size={18} className="text-gray-700 dark:text-gray-200" />
                 <div>
                   <p className="font-display text-[0.95rem] font-semibold tracking-tight text-gray-950 dark:text-gray-50">Savings Planner</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Lokalny plan finansów</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('app.brand.subtitle')}</p>
                 </div>
               </div>
               <div className="flex-1 overflow-x-auto">
@@ -189,8 +184,8 @@ export default function App() {
 
           <footer className="mx-auto max-w-[1680px] px-4 pb-6 text-center text-xs text-gray-400 dark:text-gray-600 sm:px-6 lg:px-8">
             {BACKEND_MODE === 'api'
-              ? `Dane synchronizowane z backendem przez /api${syncError ? ' · wymaga uwagi' : ''}`
-              : 'Dane lokalne w przeglądarce · brak serwera · brak telemetrii'}
+              ? `${t('app.footer.apiSynced')}${syncError ? ` · ${t('app.footer.attention')}` : ''}`
+              : t('app.footer.localOnly')}
           </footer>
         </div>
       </div>
@@ -199,8 +194,9 @@ export default function App() {
 }
 
 function AppNav({ activeTab, onNavigate, compact = false }: { activeTab: AppTab; onNavigate: (tab: AppTab) => void; compact?: boolean }) {
+  const t = useT()
   return (
-    <nav className={compact ? 'flex items-center gap-1' : 'space-y-1'} aria-label="Główna nawigacja">
+    <nav className={compact ? 'flex items-center gap-1' : 'space-y-1'} aria-label={t('app.navigation.main')}>
       {TABS.map(tab => {
         const Icon = tab.icon
         const active = activeTab === tab.id
@@ -217,7 +213,7 @@ function AppNav({ activeTab, onNavigate, compact = false }: { activeTab: AppTab;
             aria-current={active ? 'page' : undefined}
           >
             <Icon size={16} />
-            {tab.label}
+            {t(tab.label)}
           </button>
         )
       })}
@@ -226,29 +222,32 @@ function AppNav({ activeTab, onNavigate, compact = false }: { activeTab: AppTab;
 }
 
 function OverviewPage({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
+  const t = useT()
+  const currency = useStore(s => s.settings.defaultCurrency ?? 'PLN')
   useAccountSnapshotsOnDemand()
   const overview = useOverviewModel()
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Przegląd"
-        description="Net worth, wolne środki i najbliższe elementy planu."
+        title={t('app.overview.title')}
+        description={t('app.overview.description')}
         icon={LayoutDashboard}
         accent="overview"
+        action={<BlocksMenu blocks={OVERVIEW_BLOCKS} />}
       />
 
-      <NetWorthHero overview={overview} />
+      <HideableBlock blockId="overview.hero"><NetWorthHero overview={overview} /></HideableBlock>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Dochód / mc" value={overview.monthlyIncome} detail={overview.cashflowMonthLabel} tone="positive" />
-        <StatCard label="Koszty / mc" value={overview.monthlyCosts} detail={overview.costsDetail} tone="negative" />
-        <StatCard label="Wolne środki / mc" value={overview.freeCash} detail={overview.freeCashDetail} tone={overview.freeCashTone} />
-        <StatCard label="Poduszka bezpieczeństwa" value={overview.emergencyFund} detail={overview.emergencyFundLabel} tone="asset" />
-      </div>
+      <HideableBlock blockId="overview.stats"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label={t('app.overview.monthlyIncome')} value={overview.monthlyIncome} detail={overview.cashflowMonthLabel} tone="positive" />
+        <StatCard label={t('app.overview.monthlyCosts')} value={overview.monthlyCosts} detail={overview.costsDetail} tone="negative" />
+        <StatCard label={t('app.overview.monthlyFreeCash')} value={overview.freeCash} detail={overview.freeCashDetail} tone={overview.freeCashTone} />
+        <StatCard label={t('common.labels.securityCushion')} value={overview.emergencyFund} detail={overview.emergencyFundLabel} tone="asset" />
+      </div></HideableBlock>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]">
-        <SectionCard title="Net worth w czasie" description="Snapshoty kont minus bieżące saldo długów." icon={TrendingUp} accent="assets">
+        <SectionCard blockId="overview.history" title={t('app.overview.netWorthHistory')} description={t('app.overview.netWorthHistoryDescription')} icon={TrendingUp} accent="assets">
           <NetWorthChart
             accounts={overview.accounts}
             snapshots={overview.snapshots}
@@ -256,13 +255,13 @@ function OverviewPage({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
             mortgagePlan={overview.mortgagePlan}
           />
         </SectionCard>
-        <AssetsPie accounts={overview.accounts} snapshots={overview.snapshots} />
+        <HideableBlock blockId="overview.pie"><AssetsPie accounts={overview.accounts} snapshots={overview.snapshots} /></HideableBlock>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Najbliższe cele" icon={ListChecks} accent="plan">
+        <SectionCard blockId="overview.goals" title={t('app.overview.nearbyGoals')} icon={ListChecks} accent="plan">
           {overview.nextGoals.length === 0 ? (
-            <EmptyLine text="Brak aktywnych celów w planie." />
+            <EmptyLine text={t('app.overview.noActiveGoals')} />
           ) : (
             <div className="space-y-2">
               {overview.nextGoals.map(goal => (
@@ -270,20 +269,20 @@ function OverviewPage({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">{goal.name}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {goal.completionMonth ? `ETA ${formatYearMonth(goal.completionMonth)}` : goal.projectedETA ? `Poza horyzontem: ${formatYearMonth(goal.projectedETA)}` : 'Brak alokacji'}
+                      {goal.completionMonth ? `Prévu ${formatYearMonth(goal.completionMonth)}` : goal.projectedETA ? t('common.time.outsideHorizon', { month: formatYearMonth(goal.projectedETA) }) : t('common.empty.noAllocation')}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-200">{formatPLN(goal.currentBalance)}</span>
+                  <span className="text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-200">{formatCurrency(goal.currentBalance, currency)}</span>
                 </div>
               ))}
             </div>
           )}
-          <DomainButton onClick={() => onNavigate('plan')} label="Przejdź do planu" />
+          <DomainButton onClick={() => onNavigate('plan')} label={t('app.overview.openPlan')} />
         </SectionCard>
 
-        <SectionCard title="Nadchodzące wydatki" icon={CalendarClock} accent="plan">
+        <SectionCard blockId="overview.expenses" title={t('app.overview.upcomingExpenses')} icon={CalendarClock} accent="plan">
           {overview.nextExpenses.length === 0 ? (
-            <EmptyLine text="Brak nieopłaconych wydatków jednorazowych." />
+            <EmptyLine text={t('app.overview.noUpcomingExpenses')} />
           ) : (
             <div className="space-y-2">
               {overview.nextExpenses.map(expense => (
@@ -292,12 +291,12 @@ function OverviewPage({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
                     <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">{expense.name}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{formatYearMonth(expense.targetMonth)}</p>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-200">{formatPLN(expense.amount)}</span>
+                  <span className="text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-200">{formatCurrency(expense.amount, currency)}</span>
                 </div>
               ))}
             </div>
           )}
-          <DomainButton onClick={() => onNavigate('plan')} label="Otwórz cashflow" />
+          <DomainButton onClick={() => onNavigate('plan')} label={t('app.overview.openCashflow')} />
         </SectionCard>
       </div>
     </div>
@@ -305,10 +304,11 @@ function OverviewPage({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
 }
 
 function AssetsPage() {
+  const t = useT()
   useAccountSnapshotsOnDemand()
   return (
     <div className="space-y-5">
-      <PageHeader title="Majątek" description="Snapshoty kont, struktura majątku i fundusz awaryjny." icon={WalletCards} accent="assets" />
+      <PageHeader title={t('app.assets.title')} description={t('app.assets.description')} icon={WalletCards} accent="assets" action={<BlocksMenu blocks={ASSETS_BLOCKS} />} />
       <AccountsSection />
     </div>
   )
@@ -326,66 +326,135 @@ function useAccountSnapshotsOnDemand() {
   }, [hasHydratedFromBackend, hasLoadedAccountSnapshots, loadAccountSnapshots])
 }
 
+const OVERVIEW_BLOCKS = [
+  { id: 'overview.hero', label: 'app.overview.heroBlock' },
+  { id: 'overview.stats', label: 'app.overview.statsBlock' },
+  { id: 'overview.history', label: 'app.overview.netWorthHistory' },
+  { id: 'overview.pie', label: 'app.overview.pieBlock' },
+  { id: 'overview.goals', label: 'app.overview.nearbyGoals' },
+  { id: 'overview.expenses', label: 'app.overview.upcomingExpenses' },
+]
+
+const ASSETS_BLOCKS = [
+  { id: 'assets.kpi', label: 'app.assets.kpiBlock' },
+  { id: 'assets.buckets', label: 'app.assets.bucketsBlock' },
+  { id: 'assets.history', label: 'app.assets.accountHistory' },
+  { id: 'assets.pie', label: 'app.overview.pieBlock' },
+  { id: 'assets.table', label: 'accounts.section.snapshotsTitle' },
+]
+
+const TRANSACTIONS_BLOCKS = [
+  { id: 'transactions.manual', label: 'manualTransaction.title' },
+  { id: 'transactions.payPeriods', label: 'app.transactions.payPeriods' },
+  { id: 'transactions.leak', label: 'app.transactions.leakAnalysis' },
+  { id: 'transactions.categorization', label: 'app.transactions.categorization' },
+  { id: 'transactions.import', label: 'app.transactions.statementImport' },
+]
+
+const PLAN_BLOCKS: { id: string; label: string }[] = [
+  { id: 'cashflow', label: 'app.plan.monthlyCashflow' },
+  { id: 'nextBestAction', label: 'app.plan.nextBestAction' },
+  { id: 'security', label: 'app.plan.securityPriority' },
+  { id: 'forecast', label: 'app.plan.nextCycleForecast' },
+  { id: 'ikze', label: 'app.plan.annualIkze' },
+  { id: 'chart', label: 'app.plan.goalDebtForecast' },
+  { id: 'whatIf', label: 'app.plan.whatIfSimulation' },
+  { id: 'goals', label: 'common.labels.goals' },
+  { id: 'loans', label: 'app.plan.creditLoans' },
+  { id: 'mortgage', label: 'app.plan.mortgage' },
+  { id: 'creditCard', label: 'app.plan.creditCard' },
+  { id: 'upcoming', label: 'app.overview.upcomingExpenses' },
+  { id: 'subscriptions', label: 'common.labels.subscription' },
+  { id: 'schedule', label: 'app.plan.monthlySchedule' },
+]
+
+function BlocksMenu({ blocks }: { blocks: { id: string; label: string }[] }) {
+  const t = useT()
+  const { hidden, toggle, reset } = useHiddenBlocks()
+  return (
+    <details className="relative">
+      <summary className="cursor-pointer select-none rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+        {t('app.plan.blocks.title')}
+        {hidden.length > 0 && ` (${blocks.filter(block => !hidden.includes(block.id)).length}/${blocks.length})`}
+      </summary>
+      <div className="absolute right-0 z-20 mt-2 w-64 space-y-1 rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-900">
+        {blocks.map(block => (
+          <label key={block.id} className="flex cursor-pointer items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
+            <input type="checkbox" checked={!hidden.includes(block.id)} onChange={() => toggle(block.id)} />
+            {t(block.label)}
+          </label>
+        ))}
+        <button type="button" onClick={reset} className="mt-2 text-xs text-indigo-600 hover:underline dark:text-indigo-300">
+          {t('app.plan.blocks.showAll')}
+        </button>
+      </div>
+    </details>
+  )
+}
+
 function PlanPage() {
+  const t = useT()
   useAccountSnapshotsOnDemand()
   const settings = useStore(s => s.settings)
-  const goals = useStore(s => s.goals)
+  const currency = settings.defaultCurrency ?? 'PLN'
+  const goals = useResolvedGoals()
+  const securityState = useSecurityState()
   const loans = useStore(s => s.loans)
   const mortgagePlan = useStore(s => s.mortgagePlan)
   const subscriptions = useStore(s => s.subscriptions)
   const upcomingExpenses = useStore(s => s.upcomingExpenses)
   const overrides = useStore(s => s.overrides)
   const schedule = useMemo(
-    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses),
-    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses],
+    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses, securityState),
+    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
   const mortgageSummary = schedule.mortgageSummary
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Plan" description="Cashflow, cele, raty i harmonogram miesięczny." icon={BarChart3} accent="plan" />
+      <PageHeader title={t('app.plan.title')} description={t('app.plan.description')} icon={BarChart3} accent="plan" action={<BlocksMenu blocks={PLAN_BLOCKS} />} />
 
-      <SectionCard title="Miesięczny cashflow" description="Bazowe przychody, koszty życia i wolne środki po ratach." icon={CircleDollarSign} accent="plan">
+      <SectionCard blockId="cashflow" title={t('app.plan.monthlyCashflow')} description={t('app.plan.monthlyCashflowDescription')} icon={CircleDollarSign} accent="plan">
         <Hero />
       </SectionCard>
 
-      <SectionCard title="Następny najlepszy ruch" description="Jedna lokalna rekomendacja na podstawie cashflow, buforów, IKZE i celów." icon={ListChecks} accent="plan">
+      <SectionCard blockId="nextBestAction" title={t('app.plan.nextBestAction')} description={t('app.plan.nextBestActionDescription')} icon={ListChecks} accent="plan">
         <NextBestActionPanel schedule={schedule} />
       </SectionCard>
 
-      <SectionCard title="Priorytet bezpieczeństwa" description="Systemowe cele odbudowy poduszki i funduszu awaryjnego." icon={ShieldCheck} accent="plan">
+      <SectionCard blockId="security" title={t('app.plan.securityPriority')} description={t('app.plan.securityPriorityDescription')} icon={ShieldCheck} accent="plan">
         <SecurityBufferFocus schedule={schedule} />
       </SectionCard>
 
-      <SectionCard title="Prognoza następnego cyklu" description="Abonamenty, jednorazowe koszty, raty i najbliższa spłata karty." icon={CalendarClock} accent="plan">
+      <SectionCard blockId="forecast" title={t('app.plan.nextCycleForecast')} description={t('app.plan.nextCycleForecastDescription')} icon={CalendarClock} accent="plan">
         <NextCycleForecast />
       </SectionCard>
 
-      <SectionCard title="IKZE roczne" description="Limity, wpłaty i rekomendowana dopłata na pozostałe wypłaty." icon={PiggyBank} accent="plan">
+      <SectionCard blockId="ikze" title={t('app.plan.annualIkze')} description={t('app.plan.annualIkzeDescription')} icon={PiggyBank} accent="plan">
         <IkzePlanner />
       </SectionCard>
 
-      <SectionCard title="Prognoza celów i długów" icon={TrendingUp} accent="plan">
+      <SectionCard blockId="chart" title={t('app.plan.goalDebtForecast')} icon={TrendingUp} accent="plan">
         <SavingsChart />
       </SectionCard>
 
-      <SectionCard title="Symulacja what-if" icon={ReceiptText} accent="plan">
+      <SectionCard blockId="whatIf" title={t('app.plan.whatIfSimulation')} icon={ReceiptText} accent="plan">
         <WhatIfSlider />
       </SectionCard>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <SectionCard title="Cele" icon={ListChecks} accent="plan">
+        <SectionCard blockId="goals" title={t('common.labels.goals')} icon={ListChecks} accent="plan">
           <GoalInsightsSection />
           <div className="my-4 border-t border-gray-200 dark:border-gray-800" />
           <GoalList />
         </SectionCard>
-        <SectionCard title="Kredyty / raty" icon={ReceiptText} accent="plan">
+        <SectionCard blockId="loans" title={t('app.plan.creditLoans')} icon={ReceiptText} accent="plan">
           <LoanList />
         </SectionCard>
       </div>
 
-      <SectionCard
-        title="Kredyt hipoteczny"
+      <SectionCard blockId="mortgage"
+        title={t('app.plan.mortgage')}
         icon={Home}
         accent="plan"
         collapsible
@@ -394,47 +463,47 @@ function PlanPage() {
           mortgagePlan
             ? (
                 <div className="flex flex-wrap gap-x-5 gap-y-1">
-                  <span>Saldo: <strong className="tabular-nums">{formatPLN(mortgagePlan.principal)}</strong></span>
-                  <span>Rata: <strong className="tabular-nums">{formatPLN(mortgageSummary?.currentMonthlyPayment ?? 0)}</strong></span>
-                  <span>Spłata: <strong>{mortgageSummary?.payoffMonth ?? 'po horyzoncie'}</strong></span>
+                  <span>{t('app.plan.mortgageBalance')} <strong className="tabular-nums">{formatCurrency(mortgagePlan.principal, currency)}</strong></span>
+                  <span>{t('app.plan.mortgagePayment')} <strong className="tabular-nums">{formatCurrency(mortgageSummary?.currentMonthlyPayment ?? 0, currency)}</strong></span>
+                  <span>{t('app.plan.mortgagePayoff')} <strong>{mortgageSummary?.payoffMonth ?? t('common.time.beyondHorizon')}</strong></span>
                 </div>
               )
-            : 'Brak zapisanego planu hipotecznego.'
+            : t('app.plan.mortgageMissing')
         }
       >
         <MortgageSection />
       </SectionCard>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <SectionCard
-          title="Karta kredytowa"
-          description="Wykorzystany limit i ile zejdzie z konta przy najbliższej spłacie."
+        <SectionCard blockId="creditCard"
+          title={t('app.plan.creditCard')}
+          description={t('app.plan.creditCardDescription')}
           icon={CreditCard}
           accent="plan"
         >
           <CreditCardSection />
         </SectionCard>
-        <SectionCard title="Nadchodzące wydatki" icon={CalendarClock} accent="plan">
+        <SectionCard blockId="upcoming" title={t('app.overview.upcomingExpenses')} icon={CalendarClock} accent="plan">
           <UpcomingExpenseList />
         </SectionCard>
       </div>
 
-      <SectionCard title="Abonamenty" icon={Database} accent="plan">
+      <SectionCard blockId="subscriptions" title={t('common.labels.subscription')} icon={Database} accent="plan" action={<SubscriptionTotal />}>
         <SubscriptionList />
       </SectionCard>
 
-      <SectionCard
-        title="Harmonogram miesięczny"
-        description="Nadpisania przychodów, kosztów i alokacji celów."
+      <SectionCard blockId="schedule"
+        title={t('app.plan.monthlySchedule')}
+        description={t('app.plan.monthlyScheduleDescription')}
         icon={BarChart3}
         accent="plan"
         collapsible
         defaultOpen={false}
         collapsedSummary={
           <div className="flex flex-wrap gap-x-5 gap-y-1">
-            <span>Horyzont: <strong>{schedule.rows.length} mies.</strong></span>
-            <span>Cele: <strong>{goals.length}</strong></span>
-            <span>Pierwszy miesiąc: <strong>{schedule.rows[0]?.label ?? 'brak'}</strong></span>
+            <span>{t('app.plan.horizon')} <strong>{schedule.rows.length} {t('common.time.months')}</strong></span>
+            <span>{t('common.labels.goals')} <strong>{goals.length}</strong></span>
+            <span>{t('app.plan.firstMonth')} <strong>{schedule.rows[0]?.label ?? t('common.empty.none')}</strong></span>
           </div>
         }
       >
@@ -445,6 +514,7 @@ function PlanPage() {
 }
 
 function TransactionsPage() {
+  const t = useT()
   const payPeriods = useStore(s => s.payPeriods)
   const [selectedPayPeriodKey, setSelectedPayPeriodKey] = useState('')
   const selectedPeriod = useMemo(
@@ -454,17 +524,20 @@ function TransactionsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Transakcje" description="Cykle od wypłaty do wypłaty, kategorie i ręczne przypisania operacji." icon={Tags} accent="assets" />
-      <SectionCard title="Analiza wycieku" description="Kategorie, cykliczne obciążenia, mikro-wydatki i wzrosty vs poprzednie cykle." icon={TrendingUp} accent="assets">
-        <LeakAnalysisSection selectedPeriod={selectedPeriod} />
+      <PageHeader title={t('app.transactions.title')} description={t('app.transactions.description')} icon={Tags} accent="assets" action={<BlocksMenu blocks={TRANSACTIONS_BLOCKS} />} />
+      <SectionCard blockId="transactions.manual" title={t('manualTransaction.title')} description={t('manualTransaction.description')} icon={ReceiptText} accent="assets">
+        <ManualTransactionForm />
       </SectionCard>
-      <SectionCard title="Cykle budżetowe" icon={CalendarClock} accent="assets">
+      <SectionCard blockId="transactions.payPeriods" title={t('app.transactions.payPeriods')} description={t('app.transactions.payPeriodsDescription')} icon={CalendarClock} accent="assets">
         <PayPeriodsSection selectedKey={selectedPayPeriodKey} onSelectedKeyChange={setSelectedPayPeriodKey} />
       </SectionCard>
-      <SectionCard title="Kategoryzacja" icon={Tags} accent="assets">
+      <SectionCard blockId="transactions.leak" title={t('app.transactions.leakAnalysis')} description={t('app.transactions.leakAnalysisDescription')} icon={TrendingUp} accent="assets">
+        <LeakAnalysisSection selectedPeriod={selectedPeriod} />
+      </SectionCard>
+      <SectionCard blockId="transactions.categorization" title={t('app.transactions.categorization')} icon={Tags} accent="assets">
         <CategorizationSection />
       </SectionCard>
-      <SectionCard title="Import wyciągu" description="CSV/PDF z banku wpada do transakcji, kategorii i cykli." icon={FileUp} accent="assets">
+      <SectionCard blockId="transactions.import" title={t('app.transactions.statementImport')} description={t('app.transactions.statementImportDescription')} icon={FileUp} accent="assets">
         <IngestSection />
       </SectionCard>
     </div>
@@ -472,10 +545,14 @@ function TransactionsPage() {
 }
 
 function SettingsPage() {
+  const t = useT()
   return (
     <div className="space-y-5">
-      <PageHeader title="Ustawienia" description="Horyzont planu, import/eksport i status backendu." icon={Settings} accent="settings" />
-      <SectionCard title="Konfiguracja aplikacji" icon={ShieldCheck} accent="settings">
+      <PageHeader title={t('app.settings.title')} description={t('app.settings.description')} icon={Settings} accent="settings" />
+      <SectionCard title={t('report.settingsTitle')} icon={FileText} accent="settings">
+        <WealthReportExport />
+      </SectionCard>
+      <SectionCard title={t('app.settings.configuration')} icon={ShieldCheck} accent="settings">
         <AdvancedSettings />
       </SectionCard>
     </div>
@@ -499,12 +576,13 @@ function EmptyLine({ text }: { text: string }) {
 }
 
 function NetWorthHero({ overview }: { overview: ReturnType<typeof useOverviewModel> }) {
+  const t = useT()
   const negative = overview.netWorthTone === 'negative'
   return (
     <div className={`${surface} overflow-hidden`}>
       <div className="grid gap-6 p-6 sm:grid-cols-[1.25fr_1fr] sm:p-7">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-gray-500 dark:text-gray-400">Net worth</p>
+             <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-gray-500 dark:text-gray-400">{t('common.labels.netWorth')}</p>
           <p className={`mt-2 font-display text-4xl font-semibold leading-none tnum sm:text-5xl ${negative ? 'text-rose-600 dark:text-rose-400' : 'text-gray-950 dark:text-gray-50'}`}>
             {overview.netWorth}
           </p>
@@ -513,13 +591,13 @@ function NetWorthHero({ overview }: { overview: ReturnType<typeof useOverviewMod
           </p>
           {negative && (
             <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-              Na minusie, bo net worth uwzględnia saldo kredytu hipotecznego.
+                 {t('app.overview.netWorthNegativeExplanation')}
             </p>
           )}
         </div>
         <div className="flex flex-col justify-center gap-2.5 sm:border-l sm:border-gray-200/70 sm:pl-6 sm:dark:border-gray-800">
-          <BreakdownRow label="Majątek" value={overview.assetsValue} tone="asset" />
-          <BreakdownRow label="Długi" value={`−${overview.debtValue}`} tone="negative" />
+             <BreakdownRow label={t('common.labels.assets')} value={overview.assetsValue} tone="asset" />
+             <BreakdownRow label={t('common.labels.debt')} value={`−${overview.debtValue}`} tone="negative" />
         </div>
       </div>
     </div>
@@ -538,8 +616,11 @@ function BreakdownRow({ label, value, tone }: { label: string; value: string; to
 }
 
 function useOverviewModel() {
+  const t = useT()
   const settings = useStore(s => s.settings)
-  const goals = useStore(s => s.goals)
+  const currency = settings.defaultCurrency ?? 'PLN'
+  const goals = useResolvedGoals()
+  const securityState = useSecurityState()
   const loans = useStore(s => s.loans)
   const accounts = useStore(s => s.accounts)
   const snapshots = useStore(s => s.accountSnapshots)
@@ -549,8 +630,8 @@ function useOverviewModel() {
   const overrides = useStore(s => s.overrides)
 
   const schedule = useMemo(
-    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses),
-    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses],
+    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses, securityState),
+    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
 
   const months = allSnapshotMonths(snapshots)
@@ -575,35 +656,41 @@ function useOverviewModel() {
   const activeGoalIds = new Set(goals.filter(goal => (goal.currentSaved ?? 0) < goal.targetAmount).map(goal => goal.id))
   const nextGoals = schedule.goalProgress.filter(goal => activeGoalIds.has(goal.goalId)).slice(0, 4)
   const nextExpenses = upcomingExpenses
-    .filter(expense => !expense.isPaid)
+    .filter(expense => !expense.isPaid && !expense.recurring)
     .sort((a, b) => a.targetMonth.localeCompare(b.targetMonth))
     .slice(0, 4)
   const bucketLabel = emergencyBuckets.length > 0
-    ? emergencyBuckets.map(bucket => BUCKET_LABELS[bucket]).join(' + ')
-    : 'Brak bucketów'
+    ? emergencyBuckets.map(translateAccountBucket).join(' + ')
+    : t('common.empty.noBuckets')
 
   return {
     accounts,
     snapshots,
     loans,
     mortgagePlan,
-    assets: formatPLN(totalAssets),
-    netWorth: formatPLN(netWorth),
+    assets: formatCurrency(totalAssets, currency),
+    netWorth: formatCurrency(netWorth, currency),
     netWorthDetail: netWorthDelta === undefined
-      ? 'Brak poprzedniego snapshotu'
-      : `${netWorthDelta >= 0 ? '+' : ''}${formatPLN(netWorthDelta)} m/m`,
-    latestMonthLabel: latestMonth ? formatYearMonth(latestMonth) : 'Brak snapshotów',
+      ? t('common.empty.noPreviousSnapshot')
+      : t('app.overview.monthOverMonthDelta', { sign: netWorthDelta >= 0 ? '+' : '', amount: formatCurrency(netWorthDelta, currency) }),
+    latestMonthLabel: latestMonth ? formatYearMonth(latestMonth) : t('common.empty.noAccountSnapshots'),
     netWorthTone: netWorth < 0 ? 'negative' as const : 'asset' as const,
-    assetsValue: formatPLN(totalAssets),
-    debtValue: formatPLN(debt),
-    monthlyIncome: `${formatPLN(monthlyIncome)}/mc`,
-    monthlyCosts: `${formatPLN(monthlyCosts)}/mc`,
-    costsDetail: `Życie ${formatPLN(livingCosts)} · Abon. ${formatPLN(subscriptionsCost)} · Jedn. ${formatPLN(oneTimeCost)} · Raty ${formatPLN(debtCost)} · IKZE ${formatPLN(ikzeCost)}`,
-    cashflowMonthLabel: firstMonth ? formatYearMonth(firstMonth.yearMonth) : 'Pierwszy miesiąc',
-    emergencyFund: formatPLN(emergencyFund),
+    assetsValue: formatCurrency(totalAssets, currency),
+    debtValue: formatCurrency(debt, currency),
+    monthlyIncome: `${formatCurrency(monthlyIncome, currency)}/mois`,
+    monthlyCosts: `${formatCurrency(monthlyCosts, currency)}/mois`,
+    costsDetail: t('app.overview.costBreakdown', {
+      living: formatCurrency(livingCosts, currency),
+      subscriptions: formatCurrency(subscriptionsCost, currency),
+      oneTime: formatCurrency(oneTimeCost, currency),
+      debt: formatCurrency(debtCost, currency),
+      ikze: formatCurrency(ikzeCost, currency),
+    }),
+    cashflowMonthLabel: firstMonth ? formatYearMonth(firstMonth.yearMonth) : t('common.time.firstMonth'),
+    emergencyFund: formatCurrency(emergencyFund, currency),
     emergencyFundLabel: bucketLabel,
-    freeCash: `${formatPLN(freeCash)}/mc`,
-    freeCashDetail: firstMonth ? formatYearMonth(firstMonth.yearMonth) : 'Pierwszy miesiąc planu',
+    freeCash: `${formatCurrency(freeCash, currency)}/mois`,
+    freeCashDetail: firstMonth ? formatYearMonth(firstMonth.yearMonth) : t('common.time.firstPlanMonth'),
     freeCashTone: freeCash < 0 ? 'negative' as const : 'positive' as const,
     nextGoals,
     nextExpenses,

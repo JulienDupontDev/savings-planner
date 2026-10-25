@@ -120,8 +120,13 @@ class CategorizationRepository(private val jdbc: NamedParameterJdbcTemplate) {
         return findCategory(id)
     }
 
-    fun deleteCategory(id: Long): Int =
-        jdbc.update("delete from finance.categories where id = :id", mapOf("id" to id))
+    fun deleteCategory(id: Long): Int {
+        val params = mapOf("id" to id)
+        jdbc.update("delete from finance.category_rules where category_id = :id", params)
+        jdbc.update("update finance.transactions set category_id = null, category_locked = false where category_id = :id", params)
+        jdbc.update("update finance.categories set parent_id = null where parent_id = :id", params)
+        return jdbc.update("delete from finance.categories where id = :id", params)
+    }
 
     fun listRules(): List<CategoryRuleDto> =
         jdbc.query(
@@ -250,6 +255,29 @@ class CategorizationRepository(private val jdbc: NamedParameterJdbcTemplate) {
             )
         }
     }
+
+    fun findTransaction(id: Long): TransactionDto? =
+        jdbc.query(
+            """
+                select id, account_id, booked_at, amount, currency, description, counterparty, source, category_id, category_locked
+                from finance.transactions
+                where id = :id
+            """.trimIndent(),
+            mapOf("id" to id),
+        ) { rs, _ ->
+            TransactionDto(
+                id = rs.getLong("id"),
+                accountId = rs.getObject("account_id", UUID::class.java),
+                bookedAt = rs.getDate("booked_at").toLocalDate().toString(),
+                amount = rs.getBigDecimal("amount"),
+                currency = rs.getString("currency").trim(),
+                description = rs.getString("description"),
+                counterparty = rs.getString("counterparty"),
+                source = rs.getString("source"),
+                categoryId = rs.getObject("category_id", java.lang.Long::class.java)?.toLong(),
+                categoryLocked = rs.getBoolean("category_locked"),
+            )
+        }.firstOrNull()
 
     fun transactionsForRecategorization(accountId: UUID?, afterTransactionId: Long? = null): List<TransactionForCategorization> {
         val conditions = mutableListOf("category_locked = false")

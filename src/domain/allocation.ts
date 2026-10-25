@@ -15,7 +15,15 @@ import type {
 } from './types'
 import { addMonths, formatYearMonth, monthDiff, dateToYearMonth } from './formatting'
 import { ikzeMonthlyContributionCost } from './ikze'
+import { gratificationsForMonth } from './gratifications'
 import { buildMortgageSchedule } from './mortgage'
+import {
+  DEFAULT_SECURITY_MAX_SHARE_PCT,
+  DEFAULT_SECURITY_STARTER_MONTHS,
+  IMPORTANT_DEFAULT_MONTHS,
+  URGENT_DEADLINE_MONTHS,
+} from './paycheckSplit'
+import { pendingRecurringTotal, type SecurityState } from './securityBuffers'
 
 interface GoalState {
   goalId: string
@@ -29,6 +37,20 @@ function urgencyScore(goal: Goal, currentMonth: string, remaining: number): numb
   const monthsLeft = monthDiff(currentMonth, deadlineMonth)
   if (monthsLeft <= 0) return Infinity
   return remaining / monthsLeft
+}
+
+function guaranteedGoalsNeed(goals: Goal[], states: GoalState[], currentMonth: string): number {
+  let need = 0
+  for (const goal of goals) {
+    const state = states.find(s => s.goalId === goal.id)!
+    const remaining = goal.targetAmount - state.balance
+    if (remaining <= 0) continue
+    const monthsLeft = goal.deadline ? Math.max(1, monthDiff(currentMonth, dateToYearMonth(goal.deadline))) : undefined
+    const urgent = monthsLeft !== undefined && monthsLeft <= URGENT_DEADLINE_MONTHS
+    if (!goal.important && !urgent) continue
+    need += Math.min(remaining, goal.fixedAllocation || remaining / (monthsLeft ?? IMPORTANT_DEFAULT_MONTHS))
+  }
+  return need
 }
 
 function allocateMonth(
@@ -139,6 +161,7 @@ export function buildSchedule(
   mortgagePlan?: MortgagePlan,
   subscriptions: Subscription[] = [],
   upcomingExpenses: UpcomingExpense[] = [],
+  securityState?: SecurityState,
 ): Schedule {
   const sortedGoals = [...goals].sort((a, b) => a.priority - b.priority)
   const states: GoalState[] = sortedGoals.map(g => ({
@@ -156,22 +179,36 @@ export function buildSchedule(
     settings.startMonth,
     settings.horizonMonths,
   )
-  const subscriptionsTotal = subscriptions
+  const baseSubscriptionsTotal = subscriptions
     .filter(subscription => subscription.active)
     .reduce((sum, subscription) => sum + subscription.monthlyAmount, 0)
   const ikzeContributionTotal = ikzeMonthlyContributionCost(settings)
+
+  // Security is the main focus: cash is reserved for it before goals, mirroring the paycheck split.
+  let cushionMissing = 0
+  let emergencyMissing = 0
+  let starterMissing = 0
+  const emergencyEnabled = settings.emergencyFundEnabled !== false
+  const sharePct = Math.min(100, Math.max(0, settings.securityMaxSharePct ?? DEFAULT_SECURITY_MAX_SHARE_PCT))
 
   for (let i = 0; i < settings.horizonMonths; i++) {
     const yearMonth = addMonths(settings.startMonth, i)
     const override = overrides[yearMonth] ?? {}
     const baseIncome = override.income ?? settings.monthlyIncome
     const expenses = override.expenses ?? settings.monthlyExpenses
+    const recurringExpensesTotal = upcomingExpenses
+      .filter(expense => expense.recurring && expense.targetMonth <= yearMonth)
+      .reduce((sum, expense) => sum + expense.amount, 0)
+    const subscriptionsTotal = baseSubscriptionsTotal + recurringExpensesTotal
     const oneTimeExpensesTotal = upcomingExpenses
-      .filter(expense => !expense.isPaid && expense.targetMonth === yearMonth)
+      .filter(expense => !expense.recurring && !expense.isPaid && expense.targetMonth === yearMonth)
       .reduce((sum, expense) => sum + expense.amount, 0)
     const expensesTotal = expenses + subscriptionsTotal + oneTimeExpensesTotal + ikzeContributionTotal
-    const income = baseIncome + whatIfDelta
-    const grossFreeCash = baseIncome + Math.min(0, whatIfDelta) - expensesTotal
+    const gratification = settings.includeGratificationsInPlan
+      ? gratificationsForMonth(settings.gratifications, yearMonth)
+      : 0
+    const income = baseIncome + gratification + whatIfDelta
+    const grossFreeCash = baseIncome + gratification + Math.min(0, whatIfDelta) - expensesTotal
 
     // Process loans: distribute loanOverpayment to highest-balance loan first
     const loanEntries: LoanMonthEntry[] = []
@@ -207,7 +244,47 @@ export function buildSchedule(
     const savingsPool = grossFreeCash - totalLoanPayment - mortgagePaymentTotal
     const bonusPool = Math.max(0, whatIfDelta)
     const manualAlloc = override.perGoalAllocation ?? {}
-    const goalAllocations = allocateMonth(savingsPool, sortedGoals, states, yearMonth, manualAlloc, bonusPool)
+
+    // Expected return on the accounts behind each goal: balances grow before the month's contributions.
+    if (i > 0) {
+      for (const goal of sortedGoals) {
+        if (!goal.growthPct) continue
+        const state = states.find(s => s.goalId === goal.id)!
+        state.balance *= Math.pow(1 + goal.growthPct / 100, 1 / 12)
+        state.isComplete = state.balance >= goal.targetAmount
+      }
+    }
+
+    let securityAllocated = 0
+    if (securityState) {
+      if (i === 0) {
+        const costBasis = expenses + subscriptionsTotal + totalLoanPayment + mortgagePaymentTotal
+          + pendingRecurringTotal(upcomingExpenses, yearMonth)
+        cushionMissing = Math.max(0, costBasis * (settings.safetyCushionMonths ?? 6) - securityState.cushionCurrent)
+        emergencyMissing = emergencyEnabled
+          ? Math.max(0, (settings.emergencyFundTarget ?? 10000) - securityState.emergencyCurrent)
+          : 0
+        const current = securityState.cushionCurrent + (emergencyEnabled ? securityState.emergencyCurrent : 0)
+        starterMissing = Math.max(
+          0,
+          costBasis * (settings.securityStarterMonths ?? DEFAULT_SECURITY_STARTER_MONTHS) - current,
+        )
+      }
+      const missing = cushionMissing + emergencyMissing
+      const pool = Math.max(0, savingsPool)
+      if (missing > 0 && pool > 0) {
+        const starter = Math.min(starterMissing, pool)
+        const guaranteedNeed = guaranteedGoalsNeed(sortedGoals, states, yearMonth)
+        const share = Math.max(0, pool - starter - guaranteedNeed) * (sharePct / 100)
+        securityAllocated = Math.min(missing, starter + share)
+        starterMissing = Math.max(0, starterMissing - securityAllocated)
+        const toEmergency = Math.min(emergencyMissing, securityAllocated)
+        emergencyMissing -= toEmergency
+        cushionMissing = Math.max(0, cushionMissing - (securityAllocated - toEmergency))
+      }
+    }
+
+    const goalAllocations = allocateMonth(savingsPool - securityAllocated, sortedGoals, states, yearMonth, manualAlloc, bonusPool)
 
     // freeCash = what's actually left for savings after expenses AND loan payments
     const freeCash = income - expensesTotal - totalLoanPayment - mortgagePaymentTotal
@@ -222,6 +299,7 @@ export function buildSchedule(
       mortgagePaymentTotal,
       ikzeContributionTotal,
       freeCash,
+      securityAllocated,
       goalAllocations,
       loanEntries,
       mortgageEntry,

@@ -38,6 +38,7 @@
      * jak rozwiąże je bundler.
      */
     "moduleResolution": "bundler",
+    "resolveJsonModule": true,
     /*
      * allowImportingTsExtensions pozwala pisać import './App.tsx'.
      * W większych zespołach często pomija się rozszerzenia, ale Vite to obsługuje.

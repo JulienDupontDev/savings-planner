@@ -1,20 +1,26 @@
-const plnFormatter = new Intl.NumberFormat('pl-PL', {
-  style: 'currency',
-  currency: 'PLN',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
+const currencyFormatters = new Map<string, Intl.NumberFormat>()
 
-export const formatPLN = (amount: unknown): string => plnFormatter.format(Number(amount ?? 0))
+export const formatCurrency = (amount: unknown, currency = 'PLN'): string => {
+  let formatter = currencyFormatters.get(currency)
+  if (!formatter) {
+    formatter = new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+    currencyFormatters.set(currency, formatter)
+  }
+  return formatter.format(Number(amount ?? 0))
+}
 
-const MONTH_NAMES = [
-  'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
-  'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień',
-]
+export const formatPLN = (amount: unknown): string => formatCurrency(amount, 'PLN')
 
 export const formatYearMonth = (yearMonth: string): string => {
   const [year, month] = yearMonth.split('-').map(Number)
-  return `${MONTH_NAMES[month - 1]} ${year}`
+  const date = new Date(Date.UTC(year, month - 1, 1))
+  const monthName = new Intl.DateTimeFormat('fr-FR', { month: 'long', timeZone: 'UTC' }).format(date)
+  return `${monthName} ${year}`
 }
 
 export const addMonths = (yearMonth: string, n: number): string => {

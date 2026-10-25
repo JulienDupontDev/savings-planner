@@ -14,8 +14,10 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import pl.jakubmikolajczyk.savings.categorization.CategorizationService
+import pl.jakubmikolajczyk.savings.categorization.ManualTransactionService
 import pl.jakubmikolajczyk.savings.dto.CategoryDto
 import pl.jakubmikolajczyk.savings.dto.CategoryRuleDto
+import pl.jakubmikolajczyk.savings.dto.ManualTransactionCreateDto
 import pl.jakubmikolajczyk.savings.dto.RecategorizeRequestDto
 import pl.jakubmikolajczyk.savings.dto.TransactionCategoryOverrideDto
 import pl.jakubmikolajczyk.savings.payperiod.PayPeriodService
@@ -41,8 +43,11 @@ class CategoryRuleController(private val service: CategorizationService) {
 
 @RestController
 @RequestMapping("/api/transactions")
-class TransactionController(private val service: CategorizationService) {
-    @Operation(summary = "List imported bank transactions")
+class TransactionController(
+    private val service: CategorizationService,
+    private val manualTransactions: ManualTransactionService,
+) {
+    @Operation(summary = "List bank and manually entered transactions")
     @GetMapping
     fun list(
         @RequestParam(required = false) accountId: UUID?,
@@ -51,6 +56,11 @@ class TransactionController(private val service: CategorizationService) {
         @RequestParam(required = false) categoryId: Long?,
         @RequestParam(defaultValue = "200") limit: Int,
     ) = service.listTransactions(accountId, periodNo, onlyUncategorized, categoryId, limit)
+
+    @Operation(summary = "Create a manually entered transaction")
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    fun create(@Valid @RequestBody dto: ManualTransactionCreateDto) = manualTransactions.create(dto)
 
     @Operation(summary = "Manually override one transaction category")
     @PutMapping("/{id}/category")

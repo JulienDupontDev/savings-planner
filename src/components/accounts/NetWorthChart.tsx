@@ -11,8 +11,10 @@ import {
   YAxis,
 } from 'recharts'
 import { allSnapshotMonths, totalAssetsAsOf } from '../../domain/accounts'
-import { formatPLN, formatYearMonth } from '../../domain/formatting'
+import { formatCurrency, formatYearMonth } from '../../domain/formatting'
 import type { Account, AccountSnapshot, Loan, MortgagePlan } from '../../domain/types'
+import { translate as t } from '../../i18n'
+import { useDefaultCurrency } from '../../hooks/useDefaultCurrency'
 
 interface Props {
   accounts: Account[]
@@ -29,6 +31,7 @@ interface ChartPoint {
 }
 
 export function NetWorthChart({ accounts, snapshots, loans, mortgagePlan }: Props) {
+  const currency = useDefaultCurrency()
   const data = useMemo<ChartPoint[]>(() => {
     const debt = currentDebt(loans, mortgagePlan)
 
@@ -72,19 +75,19 @@ export function NetWorthChart({ accounts, snapshots, loans, mortgagePlan }: Prop
             <Tooltip
               formatter={(value: unknown, name: unknown) => {
                 const labels: Record<string, string> = {
-                  assets: 'Suma majątku',
-                  netWorth: 'Net worth netto',
-                  debt: 'Dług bieżący',
+                  assets: t('accounts.kpi.totalAssets'),
+                  netWorth: t('accounts.chart.netWorth'),
+                  debt: t('accounts.chart.currentDebt'),
                 }
-                return [formatPLN(value), labels[String(name)] ?? String(name)]
+                return [formatCurrency(value, currency), labels[String(name)] ?? String(name)]
               }}
               contentStyle={{ fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}
             />
             <Legend
               formatter={(value: string) => ({
-                assets: 'Suma majątku',
-                netWorth: 'Net worth netto',
-                debt: 'Dług bieżący',
+                assets: t('accounts.kpi.totalAssets'),
+                netWorth: t('accounts.chart.netWorth'),
+                debt: t('accounts.chart.currentDebt'),
               })[value] ?? value}
               wrapperStyle={{ fontSize: 11 }}
             />
@@ -119,7 +122,7 @@ export function NetWorthChart({ accounts, snapshots, loans, mortgagePlan }: Prop
         </ResponsiveContainer>
       </div>
       <p className="text-xs text-gray-400 dark:text-gray-500">
-        Dług jest odejmowany read-only jako bieżące saldo kredytów i hipoteki na całej historii, bo EPIC 1 nie zapisuje historii zadłużenia.
+        {t('accounts.chart.debtHistoryNote')}
       </p>
     </div>
   )

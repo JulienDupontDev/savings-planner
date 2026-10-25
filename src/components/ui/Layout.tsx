@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, type LucideIcon } from 'lucide-react'
+import { translate as t } from '../../i18n'
+import { useHiddenBlocks } from '../../hooks/useHiddenBlocks'
 
 type Accent = 'assets' | 'plan' | 'settings' | 'overview'
 type Tone = 'neutral' | 'positive' | 'negative' | 'asset' | 'plan'
@@ -23,6 +25,8 @@ interface SectionCardProps {
   collapsedSummary?: ReactNode
   children: ReactNode
   className?: string
+  /** When set, the card can be hidden by the user (persisted in localStorage). */
+  blockId?: string
 }
 
 interface StatCardProps {
@@ -83,9 +87,13 @@ export function SectionCard({
   collapsedSummary,
   children,
   className = '',
+  blockId,
 }: SectionCardProps) {
   const [open, setOpen] = useState(defaultOpen)
+  const { hidden } = useHiddenBlocks()
   const contentId = `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+
+  if (blockId && hidden.includes(blockId)) return null
 
   return (
     <section className={`${surface} p-5 ${className}`}>
@@ -110,7 +118,7 @@ export function SectionCard({
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
               aria-expanded={open}
               aria-controls={contentId}
-              aria-label={open ? `Zwiń ${title}` : `Rozwiń ${title}`}
+              aria-label={open ? t('common.accessibility.collapse', { title }) : t('common.accessibility.expand', { title })}
             >
               <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
@@ -127,6 +135,11 @@ export function SectionCard({
       </div>
     </section>
   )
+}
+
+export function HideableBlock({ blockId, children }: { blockId: string; children: ReactNode }) {
+  const { hidden } = useHiddenBlocks()
+  return hidden.includes(blockId) ? null : <>{children}</>
 }
 
 export function StatCard({ label, value, detail, tone = 'neutral' }: StatCardProps) {

@@ -48,7 +48,7 @@ The planning core:
 - Plus a credit-card tracker, subscriptions, upcoming one-off expenses and an editable monthly schedule.
 
 ### 🏷️ Transakcje (Transactions) · backend mode
-Pay-period budgeting (paycheck-to-paycheck cycles), leak analysis (recurring charges, micro-expenses, cycle-over-cycle increases) and CSV/PDF bank-statement import. These run against the Spring Boot backend.
+Pay-period budgeting (paycheck-to-paycheck cycles), leak analysis (recurring charges, micro-expenses, cycle-over-cycle increases), CSV/PDF bank-statement import, and manual transaction entry. To create cycles without importing a statement, enter salary transactions with a consistent counterparty, then choose that counterparty as a suggested salary anchor; cycles are calculated from those transactions.
 
 Transactions are categorized **deterministically by rules first**; an optional **local LLM** is then run only on whatever the rules miss. Each LLM verdict is materialized as a new rule, so the model is invoked less and less over time. Precedence is explicit: user override → rules → LLM — and because the model is local, transaction data never leaves your machine.
 
@@ -123,6 +123,14 @@ cd backend
 ./gradlew bootRun        # needs a PostgreSQL pointed at by application config
 ./gradlew test           # Testcontainers-backed repository tests
 ```
+
+### Backend logs
+
+Spring Boot logs to standard output (`stdout`/`stderr`) using SLF4J + Logback:
+
+- **Local run:** View stdout/stderr directly in your terminal, or tail your redirected log file if running in background (`tail -f <log_file>`).
+- **Docker Compose:** Run `docker compose logs -f backend` (or `docker logs -f <container_name>`).
+- **Log level configuration:** Set in `backend/src/main/resources/application.yml` or via CLI/ENV args (`--logging.level.pl.jakubmikolajczyk.savings=DEBUG`).
 
 ---
 

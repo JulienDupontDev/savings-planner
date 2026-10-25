@@ -66,18 +66,18 @@ export function buildDefaultIkzePlans(yearMonth: string): IkzePlanEntry[] {
 
   return [
     {
-      id: `ikze-jakub-${planYear}`,
+      id: `retirement-plan-1-${planYear}`,
       year: planYear,
-      ownerName: 'Jakub',
+      ownerName: 'Person 1',
       role: 'entrepreneur',
       annualLimit: 0,
       contributedAmount: 0,
       payoutsLeft,
     },
     {
-      id: `ikze-zona-${planYear}`,
+      id: `retirement-plan-2-${planYear}`,
       year: planYear,
-      ownerName: 'Zona',
+      ownerName: 'Person 2',
       role: 'employee',
       annualLimit: 0,
       contributedAmount: 0,

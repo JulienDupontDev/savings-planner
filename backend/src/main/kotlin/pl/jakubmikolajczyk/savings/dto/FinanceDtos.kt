@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
+import jakarta.validation.constraints.Digits
 import java.math.BigDecimal
 import java.util.UUID
 
@@ -116,6 +117,7 @@ data class AccountDto(
     @field:NotBlank val currency: String = "PLN",
     val openedAt: String? = null,
     val closedAt: String? = null,
+    val annualReturnPct: BigDecimal? = null,
 )
 
 data class AccountSnapshotDto(
@@ -169,6 +171,7 @@ data class UpcomingExpenseDto(
     @field:Positive val amount: BigDecimal,
     @field:NotBlank val targetMonth: String,
     val isPaid: Boolean = false,
+    val recurring: Boolean = false,
 )
 
 data class GoalDto(
@@ -179,6 +182,10 @@ data class GoalDto(
     @field:Min(1) val priority: Int,
     val fixedAllocation: BigDecimal? = null,
     val currentSaved: BigDecimal? = BigDecimal.ZERO,
+    val important: Boolean = false,
+    val repeatsYearly: Boolean = false,
+    // Konta, których salda (ostatni snapshot) razem zastępują currentSaved.
+    val accountIds: List<UUID> = emptyList(),
 )
 
 data class MortgageOneTimeOverpaymentDto(
@@ -232,18 +239,34 @@ data class IkzePlanEntryDto(
     @field:Min(0) val payoutsLeft: Int = 0,
 )
 
+data class GratificationDto(
+    @field:NotBlank val id: String,
+    @field:NotBlank val name: String,
+    @field:NotNull val yearlyAmount: BigDecimal = BigDecimal.ZERO,
+    val payoutMonths: List<Int> = emptyList(),
+)
+
 data class SettingsDto(
     @field:NotNull val monthlyIncome: BigDecimal,
     @field:NotNull val monthlyExpenses: BigDecimal,
     @field:NotBlank val startMonth: String,
     @field:Min(1) val horizonMonths: Int,
+    @field:NotBlank val defaultCurrency: String = "PLN",
     @field:NotEmpty val emergencyFundBuckets: List<AccountBucket>,
     // Cel poduszki = tyle miesięcy kosztów; cel funduszu = stała kwota docelowa.
     // Defaulty pozwalają zdeserializować stare ustawienia bez tych pól.
     @field:Min(1) val safetyCushionMonths: Int = 6,
     @field:NotNull val emergencyFundTarget: BigDecimal = BigDecimal("10000"),
+    // false => użytkownik nie chce osobnego funduszu awaryjnego (tylko poduszka). JSONB blob, brak migracji.
+    val emergencyFundEnabled: Boolean = true,
+    // Podział wypłaty; null => domyślne wartości po stronie frontu. JSONB blob, brak migracji.
+    @field:Min(0) @field:Max(12) val securityStarterMonths: Int? = null,
+    @field:Min(0) @field:Max(100) val securityMaxSharePct: Int? = null,
     @field:Valid val ikzePlans: List<IkzePlanEntryDto> = emptyList(),
     val includeIkzeContributionsInCashflow: Boolean = false,
+    // Szacowane gratyfikacje roczne (premie); includeGratificationsInPlan = tryb podglądu. JSONB blob, brak migracji.
+    @field:Valid val gratifications: List<GratificationDto> = emptyList(),
+    val includeGratificationsInPlan: Boolean = false,
     // Tracker karty kredytowej; null => karta nieskonfigurowana. JSONB blob, brak migracji.
     @field:Valid val creditCard: CreditCardDto? = null,
 )
@@ -342,6 +365,15 @@ data class TransactionDto(
     val categoryLocked: Boolean = false,
 )
 
+data class ManualTransactionCreateDto(
+    @field:NotNull val accountId: UUID,
+    @field:NotBlank val bookedAt: String,
+    @field:NotNull @field:Digits(integer = 12, fraction = 2) val amount: BigDecimal,
+    @field:NotBlank val description: String,
+    val counterparty: String? = null,
+    val categoryId: Long? = null,
+)
+
 data class TransactionCategoryOverrideDto(
     val categoryId: Long? = null,
     val locked: Boolean = true,
@@ -406,6 +438,7 @@ data class PayPeriodDto(
     val periodEnd: String? = null,
     val anchorTxId: Long,
     val isPartial: Boolean,
+    val startOverridden: Boolean = false,
     @field:NotNull val income: BigDecimal,
     @field:NotNull val expense: BigDecimal,
     @field:NotNull val net: BigDecimal,
@@ -523,4 +556,8 @@ data class GoalInsightsDto(
     @field:NotNull val averageNetPerCycle: BigDecimal,
     @field:NotNull val averageFreeCashPerCycle: BigDecimal,
     @field:Valid val goals: List<GoalPaceDto>,
+)
+
+data class PayPeriodStartUpdateDto(
+    @field:NotBlank val startDate: String,
 )

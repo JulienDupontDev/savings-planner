@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Lock, Plus, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import { IS_API_MODE } from '../../config'
-import { formatPLN } from '../../domain/formatting'
+import { formatCurrency } from '../../domain/formatting'
 import type { CashflowTreatment, CategoryKind, RecategorizeResult, RuleMatchField, RuleMatchType } from '../../domain/types'
 import { useStore } from '../../store'
 import { SortableTransactionHeader } from '../transactions/SortableTransactionHeader'
@@ -14,27 +14,28 @@ import {
   type TransactionSortKey,
 } from '../transactions/transactionSorting'
 import { Collapsible } from '../ui/Collapsible'
+import { translate as t } from '../../i18n'
 
 const KIND_LABELS: Record<CategoryKind, string> = {
-  variable: 'Zmienne',
-  fixed: 'Stale',
-  recurring: 'Cykliczne',
+  variable: t('categorization.kind.variable'),
+  fixed: t('categorization.kind.fixed'),
+  recurring: t('categorization.kind.recurring'),
 }
 
 const CASHFLOW_TREATMENT_LABELS: Record<CashflowTreatment, string> = {
-  expense: 'Koszt',
-  income: 'Przychód',
-  internal_transfer: 'Transfer własny',
-  savings: 'Oszczędności',
+  expense: t('categorization.cashflow.expense'),
+  income: t('categorization.cashflow.income'),
+  internal_transfer: t('categorization.cashflow.transfer'),
+  savings: t('categorization.cashflow.savings'),
 }
 
 const FIELD_LABELS: Record<RuleMatchField, string> = {
-  description: 'Opis',
-  counterparty: 'Kontrahent',
+  description: t('categorization.ruleField.description'),
+  counterparty: t('categorization.ruleField.counterparty'),
 }
 
 const TYPE_LABELS: Record<RuleMatchType, string> = {
-  contains: 'Zawiera',
+  contains: t('categorization.ruleMatch.contains'),
   regex: 'Regex',
 }
 
@@ -83,14 +84,18 @@ const emptyQueueStatus = (): LlmQueueStatus => ({
 })
 
 const resultSummary = (result: RecategorizeResult) =>
-  `zmieniono ${result.changed ?? 0}, nowe ${result.newlyCategorized ?? 0}, ` +
-  `LLM ${result.llmCategorized ?? 0}/${result.llmAttempted ?? 0}` +
-  (result.llmNoSuggestion ? `, bez werdyktu ${result.llmNoSuggestion}` : '') +
-  (result.llmLowConfidence ? `, niska pewność ${result.llmLowConfidence}` : '') +
-  (result.llmParseErrors ? `, JSON ${result.llmParseErrors}` : '') +
-  (result.llmTransportErrors ? `, Ollama error ${result.llmTransportErrors}` : '') +
-  (result.llmCategoryMismatch ? `, zła kategoria ${result.llmCategoryMismatch}` : '') +
-  (result.remainingUncategorized !== undefined ? `, bez kategorii ${result.remainingUncategorized}` : '')
+  t('categorization.summary', {
+    changed: result.changed ?? 0,
+    new: result.newlyCategorized ?? 0,
+    categorized: result.llmCategorized ?? 0,
+    attempted: result.llmAttempted ?? 0,
+  }) +
+  (result.llmNoSuggestion ? t('categorization.noSuggestion', { count: result.llmNoSuggestion }) : '') +
+  (result.llmLowConfidence ? t('categorization.lowConfidence', { count: result.llmLowConfidence }) : '') +
+  (result.llmParseErrors ? t('categorization.jsonErrors', { count: result.llmParseErrors }) : '') +
+  (result.llmTransportErrors ? t('categorization.ollamaErrors', { count: result.llmTransportErrors }) : '') +
+  (result.llmCategoryMismatch ? t('categorization.categoryMismatch', { count: result.llmCategoryMismatch }) : '') +
+  (result.remainingUncategorized !== undefined ? t('categorization.uncategorizedCount', { count: result.remainingUncategorized }) : '')
 
 export function CategorizationSection() {
   const categories = useStore(s => s.categories)
@@ -174,14 +179,14 @@ export function CategorizationSection() {
     const result = await recategorizeTransactions()
     await loadCategorization(loadOptionsForFilter(transactionFilter))
     setVisibleTransactionCount(TRANSACTION_PAGE_SIZE)
-    setLastRun(resultSummary(result) + (result.llmLimitReached ? ', uruchom kolejke' : ''))
+    setLastRun(resultSummary(result) + (result.llmLimitReached ? t('categorization.runQueue') : ''))
   }
 
   const runLlmQueue = async () => {
     setTransactionFilter('uncategorized')
     setVisibleTransactionCount(TRANSACTION_PAGE_SIZE)
     setLastRun(undefined)
-    setLlmQueueStatus({ ...emptyQueueStatus(), message: 'Szukam transakcji bez kategorii...' })
+    setLlmQueueStatus({ ...emptyQueueStatus(), message: t('categorization.searchingUncategorized') })
     await loadCategorization({ onlyUncategorized: true })
 
     let afterTransactionId: number | undefined
@@ -206,12 +211,17 @@ export function CategorizationSection() {
         llmCategoryMismatch: status.llmCategoryMismatch + (result.llmCategoryMismatch ?? 0),
         initialUncategorized,
         remainingUncategorized: result.remainingUncategorized,
-        message: result.llmLimitReached ? 'Kolejny batch...' : 'Kolejka zakonczona.',
+        message: result.llmLimitReached ? t('categorization.nextBatch') : t('categorization.queueDone'),
       }
       setLlmQueueStatus(status)
       setLastRun(
-        `kolejka: batchy ${status.batches}, nowe ${status.newlyCategorized}, ` +
-        `LLM ${status.llmCategorized}/${status.llmAttempted}, bez werdyktu ${status.llmNoSuggestion}`,
+        t('categorization.queueSummary', {
+          batches: status.batches,
+          new: status.newlyCategorized,
+          categorized: status.llmCategorized,
+          attempted: status.llmAttempted,
+          noSuggestion: status.llmNoSuggestion,
+        }),
       )
 
       if (!result.llmLimitReached || !result.llmLastTransactionId || (result.llmAttempted ?? 0) === 0) break
@@ -220,7 +230,7 @@ export function CategorizationSection() {
 
     await loadCategorization({ onlyUncategorized: true })
     setVisibleTransactionCount(TRANSACTION_PAGE_SIZE)
-    setLlmQueueStatus({ ...status, running: false, message: 'Kolejka zakonczona.' })
+    setLlmQueueStatus({ ...status, running: false, message: t('categorization.queueDone') })
   }
 
   const changeTransactionFilter = async (next: TransactionFilter) => {
@@ -239,7 +249,7 @@ export function CategorizationSection() {
   if (!IS_API_MODE) {
     return (
       <div className="rounded-md border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
-        Kategoryzacja transakcji jest dostepna w trybie API.
+        {t('categorization.apiOnly')}
       </div>
     )
   }
@@ -248,20 +258,19 @@ export function CategorizationSection() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-gray-600 dark:text-gray-400">
-          <span className="font-medium text-gray-900 dark:text-gray-100">{transactions.length}</span> transakcji w widoku,
-          {' '}<span className="font-medium text-gray-900 dark:text-gray-100">{uncategorized}</span> bez kategorii
-          {lastRun ? ` - ostatnie przeliczenie ${lastRun}` : ''}
+          {t('categorization.transactionCounts', { total: transactions.length, uncategorized })}
+          {lastRun ? t('categorization.lastRun', { summary: lastRun }) : ''}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            Filtr
+            {t('categorization.filter')}
             <select
               value={transactionFilter}
               onChange={event => void changeTransactionFilter(event.target.value as TransactionFilter)}
               className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-300 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100 dark:focus:ring-gray-700"
             >
-              <option value="all">Wszystkie</option>
-              <option value="uncategorized">Bez kategorii</option>
+              <option value="all">{t('categorization.all')}</option>
+              <option value="uncategorized">{t('categorization.uncategorized')}</option>
               {categories.map(category => (
                 <option key={category.id} value={`category:${category.id}`}>{category.name}</option>
               ))}
@@ -274,7 +283,7 @@ export function CategorizationSection() {
             className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
           >
             <RefreshCw size={16} />
-            Przelicz reguly
+            {t('categorization.recalculateRules')}
           </button>
           <button
             type="button"
@@ -283,7 +292,7 @@ export function CategorizationSection() {
             className="inline-flex items-center gap-2 rounded-md bg-gray-950 px-3 py-2 text-sm text-white transition-colors hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-gray-200"
           >
             <RefreshCw size={16} />
-            Kolejka LLM
+            {t('categorization.llmQueue')}
           </button>
         </div>
       </div>
@@ -292,7 +301,7 @@ export function CategorizationSection() {
         <div className="rounded-md border border-gray-200 px-3 py-3 text-sm dark:border-gray-800">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <span className="font-medium text-gray-900 dark:text-gray-100">
-              {llmQueueStatus.running ? 'Kategoryzacja LLM w toku' : 'Kategoryzacja LLM zakończona'}
+              {llmQueueStatus.running ? t('categorization.llmRunning') : t('categorization.llmDone')}
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">{llmQueueStatus.message}</span>
           </div>
@@ -303,21 +312,29 @@ export function CategorizationSection() {
             />
           </div>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            Batchy {llmQueueStatus.batches} · nowe {llmQueueStatus.newlyCategorized} · zmienione {llmQueueStatus.changed} ·
-            {' '}LLM {llmQueueStatus.llmCategorized}/{llmQueueStatus.llmAttempted} · bez werdyktu {llmQueueStatus.llmNoSuggestion}
-            {' '}· niska pewność {llmQueueStatus.llmLowConfidence} · JSON {llmQueueStatus.llmParseErrors}
-            {' '}· Ollama {llmQueueStatus.llmTransportErrors} · zła kategoria {llmQueueStatus.llmCategoryMismatch}
-            {llmQueueStatus.remainingUncategorized !== undefined ? ` · bez kategorii ${llmQueueStatus.remainingUncategorized}` : ''}
+            {t('categorization.queueDetails', {
+              batches: llmQueueStatus.batches,
+              new: llmQueueStatus.newlyCategorized,
+              changed: llmQueueStatus.changed,
+              categorized: llmQueueStatus.llmCategorized,
+              attempted: llmQueueStatus.llmAttempted,
+              noSuggestion: llmQueueStatus.llmNoSuggestion,
+              lowConfidence: llmQueueStatus.llmLowConfidence,
+              jsonErrors: llmQueueStatus.llmParseErrors,
+              ollamaErrors: llmQueueStatus.llmTransportErrors,
+              mismatch: llmQueueStatus.llmCategoryMismatch,
+              remaining: llmQueueStatus.remainingUncategorized !== undefined ? t('categorization.uncategorizedCount', { count: llmQueueStatus.remainingUncategorized }) : '',
+            })}
           </p>
         </div>
       )}
 
-      <Collapsible title="Kategorie" defaultOpen badge={String(categories.length)}>
+      <Collapsible title={t('categorization.categoryList')} defaultOpen badge={String(categories.length)}>
         <form onSubmit={createCategory} className="grid gap-2 sm:grid-cols-[minmax(12rem,1fr)_10rem_12rem_auto]">
           <input
             value={categoryName}
             onChange={event => setCategoryName(event.target.value)}
-            placeholder="Nazwa kategorii"
+            placeholder={t('categorization.categoryName')}
             className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300 dark:border-gray-800 dark:bg-gray-950 dark:focus:ring-gray-700"
           />
           <select
@@ -336,7 +353,7 @@ export function CategorizationSection() {
           </select>
           <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-md bg-gray-950 px-3 py-2 text-sm text-white dark:bg-gray-100 dark:text-gray-950">
             <Plus size={16} />
-            Dodaj
+            {t('categorization.add')}
           </button>
         </form>
 
@@ -357,7 +374,7 @@ export function CategorizationSection() {
                     value={treatment}
                     onChange={event => updateCategory(category.id, { cashflowTreatment: event.target.value as CashflowTreatment })}
                     className="w-36 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200"
-                    aria-label={`Traktowanie cashflow kategorii ${category.name}`}
+                    aria-label={t('categorization.cashflowTreatment', { name: category.name })}
                   >
                     {Object.entries(CASHFLOW_TREATMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
@@ -365,7 +382,7 @@ export function CategorizationSection() {
                     type="button"
                     onClick={() => removeCategory(category.id)}
                     className="rounded-md p-2 text-gray-400 transition-colors hover:bg-gray-50 hover:text-red-600 dark:hover:bg-gray-800"
-                    aria-label={`Usuń kategorię ${category.name}`}
+                    aria-label={t('categorization.deleteCategory', { name: category.name })}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -376,7 +393,7 @@ export function CategorizationSection() {
         </div>
       </Collapsible>
 
-      <Collapsible title="Reguly" badge={String(categoryRules.length)}>
+      <Collapsible title={t('categorization.rulesList')} badge={String(categoryRules.length)}>
         <form onSubmit={createRule} className="grid gap-2 lg:grid-cols-[9rem_8rem_minmax(12rem,1fr)_12rem_7rem_auto]">
           <select value={matchField} onChange={event => setMatchField(event.target.value as RuleMatchField)} className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-800 dark:bg-gray-950">
             {Object.entries(FIELD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -384,14 +401,14 @@ export function CategorizationSection() {
           <select value={matchType} onChange={event => setMatchType(event.target.value as RuleMatchType)} className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-800 dark:bg-gray-950">
             {Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <input value={pattern} onChange={event => setPattern(event.target.value)} placeholder="Wzorzec" className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-800 dark:bg-gray-950" />
+          <input value={pattern} onChange={event => setPattern(event.target.value)} placeholder={t('categorization.pattern')} className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-800 dark:bg-gray-950" />
           <select value={selectedRuleCategoryId ?? ''} onChange={event => setRuleCategoryId(Number(event.target.value))} className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-800 dark:bg-gray-950">
             {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select>
           <input type="number" value={priority} onChange={event => setPriority(Number(event.target.value))} className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-800 dark:bg-gray-950" />
           <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-md bg-gray-950 px-3 py-2 text-sm text-white dark:bg-gray-100 dark:text-gray-950">
             <Plus size={16} />
-            Dodaj
+            {t('categorization.add')}
           </button>
         </form>
 
@@ -399,12 +416,12 @@ export function CategorizationSection() {
           <table className="min-w-full text-sm">
             <thead className="text-left text-xs text-gray-500 dark:text-gray-400">
               <tr className="border-b border-gray-200 dark:border-gray-800">
-                <th className="py-2 pr-3 font-medium">Priorytet</th>
-                <th className="py-2 pr-3 font-medium">Pole</th>
-                <th className="py-2 pr-3 font-medium">Typ</th>
-                <th className="py-2 pr-3 font-medium">Wzorzec</th>
-                <th className="py-2 pr-3 font-medium">Kategoria</th>
-                <th className="py-2 pr-3 font-medium">Zrodlo</th>
+                <th className="py-2 pr-3 font-medium">{t('categorization.priority')}</th>
+                <th className="py-2 pr-3 font-medium">{t('categorization.field')}</th>
+                <th className="py-2 pr-3 font-medium">{t('categorization.type')}</th>
+                <th className="py-2 pr-3 font-medium">{t('categorization.pattern')}</th>
+                <th className="py-2 pr-3 font-medium">{t('common.labels.category')}</th>
+                <th className="py-2 pr-3 font-medium">{t('common.labels.source')}</th>
                 <th className="py-2 pr-0" />
               </tr>
             </thead>
@@ -415,10 +432,10 @@ export function CategorizationSection() {
                   <td className="py-2 pr-3">{FIELD_LABELS[rule.matchField]}</td>
                   <td className="py-2 pr-3">{TYPE_LABELS[rule.matchType]}</td>
                   <td className="py-2 pr-3 font-mono text-xs">{rule.pattern}</td>
-                  <td className="py-2 pr-3">{categoryById.get(rule.categoryId)?.name ?? 'Brak'}</td>
+                  <td className="py-2 pr-3">{categoryById.get(rule.categoryId)?.name ?? t('common.empty.none')}</td>
                   <td className="py-2 pr-3">{rule.source}</td>
                   <td className="py-2 pr-0 text-right">
-                    <button type="button" onClick={() => removeCategoryRule(rule.id)} className="rounded-md p-2 text-gray-400 hover:bg-gray-50 hover:text-red-600 dark:hover:bg-gray-800" aria-label="Usun regule">
+                    <button type="button" onClick={() => removeCategoryRule(rule.id)} className="rounded-md p-2 text-gray-400 hover:bg-gray-50 hover:text-red-600 dark:hover:bg-gray-800" aria-label={t('categorization.deleteRule')}>
                       <Trash2 size={16} />
                     </button>
                   </td>
@@ -429,16 +446,16 @@ export function CategorizationSection() {
         </div>
       </Collapsible>
 
-      <Collapsible title="Transakcje" defaultOpen badge={`${visibleTransactions.length}/${filteredTransactions.length}`}>
+      <Collapsible title={t('categorization.transactionsList')} defaultOpen badge={`${visibleTransactions.length}/${filteredTransactions.length}`}>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="text-left text-xs text-gray-500 dark:text-gray-400">
               <tr className="border-b border-gray-200 dark:border-gray-800">
-                <SortableTransactionHeader label="Data" sortKey="bookedAt" sort={transactionSort} onSort={sortByTransactionColumn} />
-                <SortableTransactionHeader label="Opis" sortKey="description" sort={transactionSort} onSort={sortByTransactionColumn} />
-                <SortableTransactionHeader label="Kwota" sortKey="amount" sort={transactionSort} onSort={sortByTransactionColumn} align="right" />
-                <SortableTransactionHeader label="Kategoria" sortKey="category" sort={transactionSort} onSort={sortByTransactionColumn} />
-                <SortableTransactionHeader label="Blokada" sortKey="categoryLocked" sort={transactionSort} onSort={sortByTransactionColumn} className="py-2 pr-0" />
+                <SortableTransactionHeader label={t('common.labels.date')} sortKey="bookedAt" sort={transactionSort} onSort={sortByTransactionColumn} />
+                <SortableTransactionHeader label={t('common.labels.description')} sortKey="description" sort={transactionSort} onSort={sortByTransactionColumn} />
+                <SortableTransactionHeader label={t('common.labels.amount')} sortKey="amount" sort={transactionSort} onSort={sortByTransactionColumn} align="right" />
+                <SortableTransactionHeader label={t('common.labels.category')} sortKey="category" sort={transactionSort} onSort={sortByTransactionColumn} />
+                <SortableTransactionHeader label={t('common.labels.blocking')} sortKey="categoryLocked" sort={transactionSort} onSort={sortByTransactionColumn} className="py-2 pr-0" />
               </tr>
             </thead>
             <tbody>
@@ -450,7 +467,7 @@ export function CategorizationSection() {
                     <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">{transaction.description}</p>
                   </td>
                   <td className={`whitespace-nowrap py-2 pr-3 text-right tabular-nums ${transaction.amount < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-teal-700 dark:text-teal-300'}`}>
-                    {formatPLN(transaction.amount)}
+                    {formatCurrency(transaction.amount, transaction.currency)}
                   </td>
                   <td className="py-2 pr-3">
                     <select
@@ -458,7 +475,7 @@ export function CategorizationSection() {
                       onChange={event => assignTransactionCategory(transaction.id, event.target.value ? Number(event.target.value) : undefined, true)}
                       className="w-full min-w-44 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm dark:border-gray-800 dark:bg-gray-950"
                     >
-                      <option value="">Bez kategorii</option>
+                      <option value="">{t('categorization.uncategorized')}</option>
                       {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
                     </select>
                   </td>
@@ -469,7 +486,7 @@ export function CategorizationSection() {
                       className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
                     >
                       {transaction.categoryLocked ? <Lock size={14} /> : <Unlock size={14} />}
-                      {transaction.categoryLocked ? 'Reczna' : 'Reguly'}
+                      {transaction.categoryLocked ? t('categorization.manual') : t('categorization.rules')}
                     </button>
                   </td>
                 </tr>
@@ -484,7 +501,7 @@ export function CategorizationSection() {
               onClick={() => setVisibleTransactionCount(count => count + TRANSACTION_PAGE_SIZE)}
               className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
             >
-              Pokaż kolejne {Math.min(TRANSACTION_PAGE_SIZE, hiddenTransactionCount)}
+              {t('categorization.showMore', { count: Math.min(TRANSACTION_PAGE_SIZE, hiddenTransactionCount) })}
             </button>
           </div>
         )}

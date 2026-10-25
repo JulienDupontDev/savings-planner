@@ -1,9 +1,12 @@
+import { useSecurityState } from '../../hooks/useSecurityState'
+import { useResolvedGoals } from '../../hooks/useResolvedGoals'
 import { useMemo, useState } from 'react'
 import { useStore } from '../../store'
 import { buildSchedule } from '../../domain/allocation'
 import { formatCurrencyInput, parseCurrencyInput, sanitizeCurrencyInput } from '../../domain/currency'
-import { formatPLN } from '../../domain/formatting'
+import { formatCurrency } from '../../domain/formatting'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { translate as t } from '../../i18n'
 
 function InlineNumberEdit({
   value,
@@ -37,7 +40,9 @@ function InlineNumberEdit({
 
 export function ScheduleTable() {
   const settings = useStore(s => s.settings)
-  const goals = useStore(s => s.goals)
+  const currency = settings.defaultCurrency ?? 'PLN'
+  const goals = useResolvedGoals()
+  const securityState = useSecurityState()
   const loans = useStore(s => s.loans)
   const mortgagePlan = useStore(s => s.mortgagePlan)
   const subscriptions = useStore(s => s.subscriptions)
@@ -49,15 +54,15 @@ export function ScheduleTable() {
   const [visibleRowsCount, setVisibleRowsCount] = useState(24)
 
   const schedule = useMemo(
-    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses),
-    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses],
+    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses, securityState),
+    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
   const sortedGoals = [...goals].sort((a, b) => a.priority - b.priority)
   const visibleRows = schedule.rows.slice(0, visibleRowsCount)
   const hasMoreRows = visibleRowsCount < schedule.rows.length
 
   if (goals.length === 0 && !mortgagePlan) {
-    return <p className="text-sm text-gray-400 text-center py-4">Dodaj cele lub hipotekę żeby zobaczyć harmonogram</p>
+    return <p className="text-sm text-gray-400 text-center py-4">{t('schedule.empty')}</p>
   }
 
   return (
@@ -66,11 +71,13 @@ export function ScheduleTable() {
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-700">
             <th className="text-left py-2 pr-3 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap sticky left-0 bg-white dark:bg-gray-900 z-10">
-              Miesiąc
+              {t('common.labels.month')}
             </th>
-            <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">Dochód</th>
-            <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">Koszty</th>
-            <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">Wolne</th>
+            <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{t('schedule.income')}</th>
+            <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{t('schedule.expenses')}</th>
+            <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{t('schedule.freeCash')}</th>
+
+            <th className="text-right py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">{t('schedule.security')}</th>
 
             {/* Per-goal: two columns each */}
             {sortedGoals.map(g => (
@@ -81,8 +88,8 @@ export function ScheduleTable() {
               >
                 <span className="block max-w-32 truncate" title={g.name}>{g.name}</span>
                 <span className="flex gap-4 text-[10px] font-normal text-gray-400 justify-center mt-0.5">
-                  <span>alokacja</span>
-                  <span>saldo</span>
+                  <span>{t('schedule.allocation')}</span>
+                  <span>{t('schedule.balance')}</span>
                 </span>
               </th>
             ))}
@@ -110,7 +117,7 @@ export function ScheduleTable() {
                 <td className="py-1.5 pr-3 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap sticky left-0 bg-white dark:bg-gray-900">
                   {row.label}
                   {hasOverride && (
-                    <span className="ml-1 text-orange-400" title="Niestandardowe wartości">*</span>
+                    <span className="ml-1 text-orange-400" title={t('schedule.customValues')}>*</span>
                   )}
                 </td>
 
@@ -130,20 +137,20 @@ export function ScheduleTable() {
                   />
                   {(row.subscriptionsTotal > 0 || row.oneTimeExpensesTotal > 0 || row.ikzeContributionTotal > 0) && (
                     <div className="mt-1 text-[10px] leading-4 text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                      <span title="Wydatki życiowe">życiowe {formatPLN(row.expenses)}</span>
+                      <span title={t('schedule.livingExpenses')}>{t('schedule.livingAmount', { amount: formatCurrency(row.expenses, currency) })}</span>
                       {row.subscriptionsTotal > 0 && (
                         <span className="block text-sky-600 dark:text-sky-400">
-                          + abon. {formatPLN(row.subscriptionsTotal)}
+                          {t('schedule.subscriptionAmount', { amount: formatCurrency(row.subscriptionsTotal, currency) })}
                         </span>
                       )}
                       {row.oneTimeExpensesTotal > 0 && (
                         <span className="block text-purple-600 dark:text-purple-400">
-                          + jedn. {formatPLN(row.oneTimeExpensesTotal)}
+                          {t('schedule.oneTimeAmount', { amount: formatCurrency(row.oneTimeExpensesTotal, currency) })}
                         </span>
                       )}
                       {row.ikzeContributionTotal > 0 && (
                         <span className="block text-indigo-600 dark:text-indigo-400">
-                          + IKZE {formatPLN(row.ikzeContributionTotal)}
+                          {t('schedule.ikzeAmount', { amount: formatCurrency(row.ikzeContributionTotal, currency) })}
                         </span>
                       )}
                     </div>
@@ -157,7 +164,11 @@ export function ScheduleTable() {
                     : 'text-green-700 dark:text-green-400'
                 }`}>
                   {row.isDeficit && <AlertTriangle size={10} className="inline mr-0.5" />}
-                  {formatPLN(row.freeCash)}
+                  {formatCurrency(row.freeCash, currency)}
+                </td>
+
+                <td className="py-1.5 px-2 text-right tabular-nums whitespace-nowrap text-teal-700 dark:text-teal-400">
+                  {formatCurrency(row.securityAllocated ?? 0, currency)}
                 </td>
 
                 {/* Per-goal: allocation (editable) + saldo */}
@@ -176,7 +187,7 @@ export function ScheduleTable() {
                           <button
                             onClick={() => setGoalAllocationOverride(row.yearMonth, goal.id, null)}
                             className="text-gray-300 dark:text-gray-600 hover:text-orange-400 transition-colors"
-                            title="Usuń nadpisanie alokacji"
+                            title={t('schedule.clearAllocation')}
                           >
                             <RefreshCw size={10} />
                           </button>
@@ -198,7 +209,7 @@ export function ScheduleTable() {
                           : 'text-gray-700 dark:text-gray-300'
                       }`}
                     >
-                      {alloc !== undefined ? formatPLN(alloc.balanceAfter) : '—'}
+                      {alloc !== undefined ? formatCurrency(alloc.balanceAfter, currency) : '—'}
                     </td>,
                   ]
                 })}
@@ -209,7 +220,7 @@ export function ScheduleTable() {
                     <button
                       onClick={() => clearOverride(row.yearMonth)}
                       className="text-gray-300 dark:text-gray-600 hover:text-orange-400 transition-colors"
-                      title="Przywróć wszystkie wartości domyślne tego miesiąca"
+                      title={t('schedule.resetMonth')}
                     >
                       <RefreshCw size={12} />
                     </button>
@@ -224,7 +235,7 @@ export function ScheduleTable() {
       {schedule.rows.length > 24 && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3 dark:border-gray-800">
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Pokazuję {visibleRows.length} z {schedule.rows.length} miesięcy.
+            {t('schedule.visibleRows', { visible: visibleRows.length, total: schedule.rows.length })}
           </p>
           <div className="flex gap-2">
             {hasMoreRows && (
@@ -233,7 +244,7 @@ export function ScheduleTable() {
                 onClick={() => setVisibleRowsCount(count => Math.min(count + 24, schedule.rows.length))}
                 className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
               >
-                Pokaż kolejne 24
+                {t('schedule.showMore')}
               </button>
             )}
             {visibleRows.length > 24 && (
@@ -242,7 +253,7 @@ export function ScheduleTable() {
                 onClick={() => setVisibleRowsCount(24)}
                 className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
               >
-                Zwiń do 24
+                {t('schedule.collapse')}
               </button>
             )}
           </div>
@@ -251,10 +262,10 @@ export function ScheduleTable() {
 
       <p className="text-xs text-gray-400 mt-3 space-y-0.5">
         <span className="block">
-          * = nadpisane wartości. Kliknij <RefreshCw size={10} className="inline" /> przy alokacji żeby usunąć override celu, lub przy miesiącu żeby zresetować cały wiersz.
+          {t('schedule.overrideHelp')}
         </span>
         <span className="block text-gray-300 dark:text-gray-600">
-          Kolumna "alokacja" — wpisz kwotę żeby zablokować ile idzie na dany cel w tym miesiącu. Reszta wolnych środków trafi do pozostałych celów normalnie.
+          {t('schedule.allocationHelp')}
         </span>
       </p>
     </div>

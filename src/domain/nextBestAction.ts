@@ -2,6 +2,8 @@ import { summarizeIkzePlans } from './ikze'
 import type { NextCycleForecast } from './nextCycleForecast'
 import type { SecurityBuffersModel } from './securityBuffers'
 import type { Goal, Settings } from './types'
+import { translate as t } from '../i18n'
+import { formatCurrency } from './formatting'
 
 export type NextBestActionKind =
   | 'cover_deficit'
@@ -44,63 +46,22 @@ export function buildNextBestAction({
   goals,
 }: NextBestActionInput): NextBestAction {
   const available = roundMoney(forecast.freeCashAfterCreditCard)
+  const formatAmount = (value: number) => formatCurrency(value, settings.defaultCurrency ?? 'PLN')
 
   if (available < 0) {
     const deficit = Math.abs(available)
     return {
       kind: 'cover_deficit',
-      title: 'Domknij deficyt następnego cyklu',
+        title: t('recommendation.actions.coverDeficit.title'),
       amount: deficit,
       confidence: 'high',
       reasons: [
-        'Następny cykl jest pod kreską po kosztach i spłacie karty.',
-        'Dopóki deficyt nie jest pokryty, nowe oszczędzanie zwiększa ryzyko cashflow.',
+          t('recommendation.actions.coverDeficit.reasonAfterCosts'),
+          t('recommendation.actions.coverDeficit.reasonCashflowRisk'),
       ],
       effects: [
-        `Do zabezpieczenia brakuje ${formatAmount(deficit)}.`,
-        'Cele oszczędnościowe powinny poczekać do dodatniej wolnej gotówki.',
-      ],
-      source: 'algorithm',
-    }
-  }
-
-  if (!security.latestMonth) {
-    return {
-      kind: 'hold_surplus',
-      title: 'Uzupełnij snapshoty przed decyzją',
-      amount: Math.max(available, 0),
-      confidence: 'low',
-      reasons: [
-        'Brak snapshotów kont, więc silnik nie wie, czy fundusz awaryjny i poduszka są bezpieczne.',
-      ],
-      effects: [
-        available > 0
-          ? `Nadwyżka ${formatAmount(available)} zostaje dostępna do ręcznej decyzji po aktualizacji Majątku.`
-          : 'Ten cykl nie ma wolnej gotówki do rozdysponowania.',
-      ],
-      source: 'algorithm',
-    }
-  }
-
-  const missingSecurity = security.missingBuffers[0]
-  if (missingSecurity && available > 0) {
-    const amount = Math.min(available, missingSecurity.missing)
-    return {
-      kind: 'top_up_security_buffer',
-      title: `Doładuj ${missingSecurity.title.toLowerCase()}`,
-      amount,
-      targetId: missingSecurity.goalId,
-      targetName: missingSecurity.title,
-      confidence: security.latestMonth ? 'high' : 'medium',
-      reasons: [
-        `${missingSecurity.title} jest poniżej celu o ${formatAmount(missingSecurity.missing)}.`,
-        'Bezpieczeństwo finansowe ma priorytet przed IKZE i celami uznaniowymi.',
-      ],
-      effects: [
-        amount >= missingSecurity.missing
-          ? `${missingSecurity.title} zostanie domknięty.`
-          : `${missingSecurity.title} zmniejszy lukę do ${formatAmount(missingSecurity.missing - amount)}.`,
-        `Po ruchu zostanie ${formatAmount(Math.max(available - amount, 0))} wolnej gotówki w cyklu.`,
+          t('recommendation.actions.coverDeficit.missingAmount', { amount: formatAmount(deficit) }),
+          t('recommendation.actions.coverDeficit.waitForPositiveCash'),
       ],
       source: 'algorithm',
     }
@@ -111,20 +72,62 @@ export function buildNextBestAction({
     const amount = Math.min(available, ikze.perPayout, ikze.remaining)
     return {
       kind: 'fund_ikze',
-      title: 'Dopłać IKZE na ten cykl',
+      title: t('recommendation.actions.ikze.title'),
       amount,
       targetId: 'ikze',
-      targetName: 'IKZE',
+      targetName: t('recommendation.actions.ikze.title'),
       confidence: 'medium',
       reasons: [
-        `Bezpieczeństwo jest domknięte, a w IKZE zostało ${formatAmount(ikze.remaining)} limitu.`,
-        `Rekomendowana wpłata na wypłatę wynosi ${formatAmount(ikze.perPayout)}.`,
+          t('recommendation.actions.ikze.remainingLimit', { amount: formatAmount(ikze.remaining) }),
+          t('recommendation.actions.ikze.recommendedPayment', { amount: formatAmount(ikze.perPayout) }),
       ],
       effects: [
         amount >= ikze.remaining
-          ? 'Roczny limit IKZE zostanie domknięty.'
-          : `Do limitu IKZE zostanie ${formatAmount(ikze.remaining - amount)}.`,
-        `Po ruchu zostanie ${formatAmount(Math.max(available - amount, 0))} wolnej gotówki w cyklu.`,
+          ? t('recommendation.actions.ikze.limitReached')
+          : t('recommendation.actions.ikze.limitRemaining', { amount: formatAmount(ikze.remaining - amount) }),
+        t('recommendation.actions.cashRemaining', { amount: formatAmount(Math.max(available - amount, 0)) }),
+      ],
+      source: 'algorithm',
+    }
+  }
+
+  if (!security.latestMonth) {
+    return {
+      kind: 'hold_surplus',
+      title: t('recommendation.actions.missingSnapshots.title'),
+      amount: Math.max(available, 0),
+      confidence: 'low',
+      reasons: [
+          t('recommendation.actions.missingSnapshots.reason'),
+      ],
+      effects: [
+        available > 0
+          ? t('recommendation.actions.missingSnapshots.manualSurplus', { amount: formatAmount(available) })
+          : t('common.empty.noCashToAllocate'),
+      ],
+      source: 'algorithm',
+    }
+  }
+
+  const missingSecurity = security.missingBuffers[0]
+  if (missingSecurity && available > 0) {
+    const amount = Math.min(available, missingSecurity.missing)
+    return {
+      kind: 'top_up_security_buffer',
+      title: t('recommendation.actions.securityBuffer.title', { name: missingSecurity.title.toLowerCase() }),
+      amount,
+      targetId: missingSecurity.goalId,
+      targetName: missingSecurity.title,
+      confidence: security.latestMonth ? 'high' : 'medium',
+      reasons: [
+          t('recommendation.actions.securityBuffer.belowTarget', { name: missingSecurity.title, amount: formatAmount(missingSecurity.missing) }),
+          t('recommendation.actions.securityBuffer.priority'),
+      ],
+      effects: [
+        amount >= missingSecurity.missing
+          ? t('recommendation.actions.securityBuffer.completed', { name: missingSecurity.title })
+          : t('recommendation.actions.securityBuffer.remainingGap', { name: missingSecurity.title, amount: formatAmount(missingSecurity.missing - amount) }),
+        t('recommendation.actions.cashRemaining', { amount: formatAmount(Math.max(available - amount, 0)) }),
       ],
       source: 'algorithm',
     }
@@ -136,20 +139,20 @@ export function buildNextBestAction({
     const amount = Math.min(available, remaining)
     return {
       kind: 'fund_goal',
-      title: `Zasil cel: ${goal.name}`,
+      title: t('recommendation.actions.goal.title', { name: goal.name }),
       amount,
       targetId: goal.id,
       targetName: goal.name,
       confidence: 'medium',
       reasons: [
-        'Bezpieczeństwo i IKZE nie wymagają pilniejszego ruchu w tym cyklu.',
-        `${goal.name} jest najwyżej w kolejce aktywnych celów.`,
+          t('recommendation.actions.goal.noUrgentNeed'),
+          t('recommendation.actions.goal.nextPriority', { name: goal.name }),
       ],
       effects: [
         amount >= remaining
-          ? `${goal.name} zostanie domknięty.`
-          : `${goal.name} zmniejszy lukę do ${formatAmount(remaining - amount)}.`,
-        `Po ruchu zostanie ${formatAmount(Math.max(available - amount, 0))} wolnej gotówki w cyklu.`,
+          ? t('recommendation.actions.securityBuffer.completed', { name: goal.name })
+          : t('recommendation.actions.securityBuffer.remainingGap', { name: goal.name, amount: formatAmount(remaining - amount) }),
+        t('recommendation.actions.cashRemaining', { amount: formatAmount(Math.max(available - amount, 0)) }),
       ],
       source: 'algorithm',
     }
@@ -157,16 +160,16 @@ export function buildNextBestAction({
 
   return {
     kind: 'hold_surplus',
-    title: 'Zostaw nadwyżkę jako bufor',
+    title: t('recommendation.actions.surplus.title'),
     amount: Math.max(available, 0),
     confidence: 'low',
     reasons: [
-      'Nie ma pilnego deficytu, brakującego bufora bezpieczeństwa, aktywnego IKZE ani celu do zasilenia.',
+        t('recommendation.actions.surplus.reason'),
     ],
     effects: [
       available > 0
-        ? `Nadwyżka ${formatAmount(available)} zostaje dostępna na ręczną decyzję.`
-        : 'Ten cykl nie ma wolnej gotówki do rozdysponowania.',
+        ? t('recommendation.actions.surplus.manualDecision', { amount: formatAmount(available) })
+        : t('common.empty.noCashToAllocate'),
     ],
     source: 'algorithm',
   }
@@ -184,8 +187,4 @@ function nextManualGoal(goals: Goal[]): Goal | undefined {
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100
-}
-
-function formatAmount(value: number): string {
-  return `${roundMoney(value).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`
 }

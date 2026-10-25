@@ -74,6 +74,28 @@ class PayPeriodRepositoryTest @Autowired constructor(
     }
 
     @Test
+    fun `manual income without a counterparty can use its description as a salary anchor`() {
+        val account = accounts.save(AccountEntity(name = "Everyday", bucket = "accounts"))
+        insertTransaction(
+            accountId = account.id,
+            bookedAt = "2026-10-25",
+            counterparty = null,
+            description = "Salaires",
+            amount = "5500.00",
+            source = "manual",
+        )
+
+        val candidate = service.listCandidates(limit = 10).single()
+        assertEquals("salaires", candidate.counterparty)
+
+        service.createAnchor(IncomeAnchorCreateDto(account.id, candidate.counterparty))
+
+        val periods = service.listPayPeriods(account.id, limit = 10)
+        assertEquals(1, periods.size)
+        assertEquals("2026-10-25", periods.single().periodStart)
+    }
+
+    @Test
     fun `candidate list prioritizes anchored counterparties before applying limit`() {
         val account = accounts.save(AccountEntity(name = "Alior", bucket = "accounts"))
         insertTransaction(account.id, "2026-01-01", "PAYROLL A", "Salary A", "5000.00")
@@ -94,17 +116,18 @@ class PayPeriodRepositoryTest @Autowired constructor(
     private fun insertTransaction(
         accountId: UUID,
         bookedAt: String,
-        counterparty: String,
+        counterparty: String?,
         description: String,
         amount: String,
         categoryId: Long? = null,
+        source: String = "test",
     ): Long =
         jdbc.query(
             """
                 insert into finance.transactions
                     (account_id, booked_at, amount, currency, description, counterparty, source, fingerprint, raw, category_id)
                 values
-                    (:accountId, :bookedAt, :amount, 'PLN', :description, :counterparty, 'test', :fingerprint, '{}'::jsonb, :categoryId)
+                    (:accountId, :bookedAt, :amount, 'PLN', :description, :counterparty, :source, :fingerprint, '{}'::jsonb, :categoryId)
                 returning id
             """.trimIndent(),
             MapSqlParameterSource()
@@ -113,6 +136,7 @@ class PayPeriodRepositoryTest @Autowired constructor(
                 .addValue("amount", BigDecimal(amount))
                 .addValue("description", description)
                 .addValue("counterparty", counterparty)
+                .addValue("source", source)
                 .addValue("fingerprint", "$accountId-$bookedAt-$amount-$description")
                 .addValue("categoryId", categoryId),
         ) { rs, _ -> rs.getLong("id") }.first()

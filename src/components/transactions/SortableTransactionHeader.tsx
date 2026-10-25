@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import type { TransactionSort, TransactionSortKey } from './transactionSorting'
+import { translate as t } from '../../i18n'
 
 export function SortableTransactionHeader({
   label,
@@ -27,7 +28,7 @@ export function SortableTransactionHeader({
         className={`inline-flex w-full items-center gap-1.5 rounded-sm text-xs font-medium transition-colors hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 dark:hover:text-gray-100 ${
           align === 'right' ? 'justify-end text-right' : 'justify-start text-left'
         } ${active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}
-        aria-label={`Sortuj po kolumnie ${label}`}
+        aria-label={t('common.accessibility.sortBy', { label })}
       >
         <span>{label}</span>
         <Icon size={13} className={active ? 'opacity-100' : 'opacity-35'} />

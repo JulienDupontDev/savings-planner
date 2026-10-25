@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { ACCOUNT_BUCKETS, BUCKET_LABELS } from '../../domain/accounts'
+import { ACCOUNT_BUCKETS } from '../../domain/accounts'
+import { SUPPORTED_CURRENCIES } from '../../domain/currency'
 import type { Account, AccountBucket } from '../../domain/types'
+import { translate as t, translateAccountBucket } from '../../i18n'
 
 type AccountFormData = Omit<Account, 'id' | 'openedAt' | 'closedAt'>
 
@@ -13,11 +15,12 @@ interface Props {
    * i przekazywane bez dekoratorów.
    */
   initial?: Partial<Account>
-  onSave: (data: AccountFormData) => void
-  onCancel: () => void
+   defaultCurrency?: string
+   onSave: (data: AccountFormData) => void
+   onCancel: () => void
 }
 
-export function AccountForm({ initial, onSave, onCancel }: Props) {
+export function AccountForm({ initial, defaultCurrency = 'PLN', onSave, onCancel }: Props) {
   /*
    * Controlled form fields:
    * Stan inputów mieszka w React state, a input pokazuje value ze state.
@@ -29,7 +32,8 @@ export function AccountForm({ initial, onSave, onCancel }: Props) {
    */
   const [name, setName] = useState(initial?.name ?? '')
   const [bucket, setBucket] = useState<AccountBucket>(initial?.bucket ?? 'accounts')
-  const [currency, setCurrency] = useState(initial?.currency ?? 'PLN')
+  const [currency, setCurrency] = useState(initial?.currency ?? defaultCurrency)
+  const [annualReturn, setAnnualReturn] = useState(initial?.annualReturnPct !== undefined ? String(initial.annualReturnPct) : '')
 
   const handleSubmit = (e: React.FormEvent) => {
     /*
@@ -47,45 +51,66 @@ export function AccountForm({ initial, onSave, onCancel }: Props) {
        */
       name: name.trim(),
       bucket,
-      currency: currency.trim() || 'PLN',
+      currency: currency.trim() || defaultCurrency,
+      annualReturnPct: Number.isFinite(parseFloat(annualReturn)) && parseFloat(annualReturn) !== 0 ? parseFloat(annualReturn) : undefined,
     })
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-[1fr_220px_120px_auto_auto] md:items-end">
+    <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-[1fr_220px_120px_150px_auto_auto] md:items-end">
       <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Nazwa konta</label>
+        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('accounts.form.name')}</label>
         <input
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="np. Konto główne, IKE, XTB"
+          placeholder={t('accounts.form.namePlaceholder')}
           className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           required
         />
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Bucket</label>
+        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('accounts.form.bucket')}</label>
         <select
           value={bucket}
           onChange={e => setBucket(e.target.value as AccountBucket)}
           className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {ACCOUNT_BUCKETS.map(item => (
-            <option key={item} value={item}>{BUCKET_LABELS[item]}</option>
+            <option key={item} value={item}>{translateAccountBucket(item)}</option>
           ))}
         </select>
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Waluta</label>
-        <input
-          type="text"
+        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('common.labels.currency')}</label>
+        <select
           value={currency}
-          onChange={e => setCurrency(e.target.value.toUpperCase())}
-          maxLength={3}
-          className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
+          onChange={e => setCurrency(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {!SUPPORTED_CURRENCIES.some(item => item.code === currency) && (
+            <option value={currency}>{currency}</option>
+          )}
+          {SUPPORTED_CURRENCIES.map(item => (
+            <option key={item.code} value={item.code}>{item.code}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide" title={t('accounts.form.annualReturnHelp')}>{t('accounts.form.annualReturn')}</label>
+        <input
+          type="number"
+          step="0.1"
+          min={-100}
+          max={100}
+          value={annualReturn}
+          onChange={e => setAnnualReturn(e.target.value)}
+          placeholder="0"
+          title={t('accounts.form.annualReturnHelp')}
+          className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-right text-gray-900 dark:text-gray-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -93,14 +118,14 @@ export function AccountForm({ initial, onSave, onCancel }: Props) {
         type="submit"
         className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-md transition-colors dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white"
       >
-        Zapisz
+        {t('common.actions.save')}
       </button>
       <button
         type="button"
         onClick={onCancel}
         className="px-4 py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
       >
-        Anuluj
+        {t('common.actions.cancel')}
       </button>
     </form>
   )

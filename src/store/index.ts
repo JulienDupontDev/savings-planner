@@ -24,7 +24,11 @@ import {
   type CsvImportResult,
 } from '../api/client'
 import { IS_API_MODE } from '../config'
+import { translate as t } from '../i18n'
 import { buildSchedule } from '../domain/allocation'
+import { resolveGoalBalances } from '../domain/goalAccounts'
+import { expandRecurringGoals } from '../domain/recurringGoals'
+import { buildSecurityState } from '../domain/securityBuffers'
 import { earliestSnapshotMonth } from '../domain/accounts'
 import { currentYearMonth } from '../domain/formatting'
 import { createId } from '../domain/id'
@@ -120,6 +124,14 @@ interface AppState extends DataState, SyncState {
   bootstrapBackendFromLocal: () => Promise<BootstrapResult>
   importAccountSnapshotsCsv: (file: File, mapping: CsvImportMapping) => Promise<CsvImportResult>
   importBankStatement: (bank: BankSource, accountId: string, file: File) => Promise<IngestResult>
+  createTransaction: (transaction: {
+    accountId: string
+    bookedAt: string
+    amount: number
+    description: string
+    counterparty?: string
+    categoryId?: number
+  }) => Promise<BankTransaction>
   loadAccountSnapshots: () => Promise<void>
   loadCategorization: (options?: boolean | CategorizationLoadOptions) => Promise<void>
   loadPayPeriods: () => Promise<void>
@@ -156,6 +168,7 @@ interface AppState extends DataState, SyncState {
   removeIncomeAnchor: (id: number) => Promise<void>
   refreshPayPeriods: () => Promise<PayPeriodRefreshResult>
   updatePayPeriodSettings: (settings: PayPeriodSettings) => Promise<void>
+  updatePayPeriodStart: (period: PayPeriod, startDate?: string) => Promise<void>
   saveMortgagePlan: (plan: Omit<MortgagePlan, 'id'> & { id?: string }) => void
   removeMortgagePlan: () => void
   addSubscription: (subscription: Omit<Subscription, 'id'>) => void
@@ -185,8 +198,10 @@ export const defaultSettings: Settings = {
   monthlyExpenses: 6000,
   startMonth: currentYearMonth(),
   horizonMonths: 36,
+  defaultCurrency: 'PLN',
   emergencyFundBuckets: ['safety_cushion'],
   safetyCushionMonths: 6,
+  emergencyFundEnabled: true,
   emergencyFundTarget: 10000,
   ikzePlans: [],
   includeIkzeContributionsInCashflow: false,
@@ -250,7 +265,9 @@ const syncStamp = () => new Date().toISOString()
  * throw "boom", throw 123, throw new Error(...).
  */
 const describeSyncError = (error: unknown) =>
-  error instanceof Error ? error.message : 'Nie udało się zsynchronizować danych z backendem.'
+  error instanceof Error
+    ? t('store.syncError', { message: error.message })
+    : t('store.syncErrorFallback')
 
 /*
  * POST bootstrap wysyła encje bez id.
@@ -417,7 +434,9 @@ async function loadBackendState(options: HydrateOptions = {}): Promise<DataState
   const accountSnapshots = options.includeAccountSnapshots === false
     ? []
     : (await Promise.all(accounts.map(account => snapshotsApi.history(account.id)))).flat()
-  const settings = settingsFromApi ?? await settingsApi.put(defaultSettings)
+  const settings = settingsFromApi
+    ? { ...defaultSettings, ...settingsFromApi }
+    : await settingsApi.put(defaultSettings)
 
   return {
     settings,
@@ -535,7 +554,7 @@ export const useStore = create<AppState>()(
            * ryzykować duplikaty.
            */
           if (!IS_API_MODE) {
-            return { skipped: true, message: 'Bootstrap jest dostępny tylko w trybie API.' }
+            return { skipped: true, message: t('store.bootstrapApiOnly') }
           }
 
           const localState = readPersistedLocalState() ?? dataSnapshot(get())
@@ -546,7 +565,7 @@ export const useStore = create<AppState>()(
               set({ isHydrating: false })
               return {
                 skipped: true,
-                message: 'Backend nie jest pusty, więc bootstrap został zatrzymany żeby nie zdublować danych.',
+                message: t('store.bootstrapServerNotEmpty'),
               }
             }
 
@@ -596,7 +615,7 @@ export const useStore = create<AppState>()(
               syncError: undefined,
               lastSyncedAt: syncStamp(),
             })
-            return { skipped: false, message: 'Dane lokalne zostały wysłane do backendu.' }
+            return { skipped: false, message: t('store.bootstrapSuccess') }
           } catch (error) {
             set({
               ...localState,
@@ -625,7 +644,7 @@ export const useStore = create<AppState>()(
         },
 
         importBankStatement: async (bank, accountId, file) => {
-          if (!IS_API_MODE) throw new Error('Import wyciagu bankowego jest dostepny tylko w trybie API.')
+          if (!IS_API_MODE) throw new Error(t('store.statementImportApiOnly'))
           set({ syncError: undefined })
           try {
             const result = await ingestApi.upload(bank, accountId, file)
@@ -641,6 +660,24 @@ export const useStore = create<AppState>()(
             ])
             set({ lastSyncedAt: syncStamp() })
             return result
+          } catch (error) {
+            set({ syncError: describeSyncError(error) })
+            throw error
+          }
+        },
+
+        createTransaction: async (transaction) => {
+          if (!IS_API_MODE) throw new Error(t('store.manualTransactionApiOnly'))
+          set({ syncError: undefined })
+          try {
+            const created = await transactionsApi.create(transaction)
+            await Promise.all([
+              get().loadCategorization(),
+              get().loadPayPeriods(),
+              get().loadGoalInsights(),
+            ])
+            set({ lastSyncedAt: syncStamp() })
+            return created
           } catch (error) {
             set({ syncError: describeSyncError(error) })
             throw error
@@ -762,7 +799,15 @@ export const useStore = create<AppState>()(
           const snapshot = dataSnapshot(get())
           const settings = { ...get().settings, ...patch }
           set({ settings })
-          runMutation(snapshot, () => settingsApi.put(settings))
+          runMutation(snapshot, async () => {
+            const savedSettings = await settingsApi.put(settings)
+            if (
+              patch.defaultCurrency !== undefined &&
+              savedSettings.defaultCurrency !== patch.defaultCurrency
+            ) {
+              throw new Error(t('store.defaultCurrencyNotPersisted'))
+            }
+          })
         },
 
         addGoal: (goalData) => {
@@ -1084,6 +1129,20 @@ export const useStore = create<AppState>()(
           }
         },
 
+        updatePayPeriodStart: async (period, startDate) => {
+          if (!IS_API_MODE) return
+          set({ syncError: undefined })
+          try {
+            if (startDate) await payPeriodsApi.updateStart(period.accountId, period.periodNo, startDate)
+            else await payPeriodsApi.resetStart(period.accountId, period.periodNo)
+            await get().loadPayPeriods()
+            await get().loadGoalInsights()
+            set({ lastSyncedAt: syncStamp() })
+          } catch (error) {
+            set({ syncError: describeSyncError(error) })
+          }
+        },
+
         updatePayPeriodSettings: async (payPeriodSettings) => {
           if (!IS_API_MODE) return
           set({ payPeriodSettings, syncError: undefined })
@@ -1304,8 +1363,19 @@ export const useStore = create<AppState>()(
         },
 
         getSchedule: () => {
-          const { settings, goals, loans, mortgagePlan, subscriptions, upcomingExpenses, overrides } = get()
-          return buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses)
+          const { settings, goals, loans, mortgagePlan, subscriptions, upcomingExpenses, overrides, accounts, accountSnapshots } = get()
+          return buildSchedule(
+            settings,
+            resolveGoalBalances(expandRecurringGoals(goals, settings), accounts, accountSnapshots),
+            loans,
+            overrides,
+            0,
+            0,
+            mortgagePlan,
+            subscriptions,
+            upcomingExpenses,
+            buildSecurityState(settings, accounts, accountSnapshots),
+          )
         },
 
         getWhatIfSchedule: () => {
@@ -1319,10 +1389,12 @@ export const useStore = create<AppState>()(
             overrides,
             whatIfDelta,
             loanOverpayment,
+            accounts,
+            accountSnapshots,
           } = get()
           return buildSchedule(
             settings,
-            goals,
+            resolveGoalBalances(expandRecurringGoals(goals, settings), accounts, accountSnapshots),
             loans,
             overrides,
             whatIfDelta,
@@ -1330,6 +1402,7 @@ export const useStore = create<AppState>()(
             mortgagePlan,
             subscriptions,
             upcomingExpenses,
+            buildSecurityState(settings, accounts, accountSnapshots),
           )
         },
       }

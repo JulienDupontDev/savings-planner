@@ -69,6 +69,58 @@ class GoalIntegrationRepositoryTest @Autowired constructor(
         assertEquals(BigDecimal("3700.00"), cycle.freeCash)
     }
 
+    @Test
+    fun `goal inputs read saved amount from the linked account by priority`() {
+        val account = accounts.save(AccountEntity(name = "Vacances", bucket = "vacation"))
+        jdbc.update(
+            "insert into finance.account_snapshots (id, account_id, snapshot_date, balance) values (:id, :account, :date, :balance)",
+            MapSqlParameterSource()
+                .addValue("id", UUID.randomUUID()).addValue("account", account.id)
+                .addValue("date", Date.valueOf("2026-05-01")).addValue("balance", BigDecimal("100")),
+        )
+        jdbc.update(
+            "insert into finance.account_snapshots (id, account_id, snapshot_date, balance) values (:id, :account, :date, :balance)",
+            MapSqlParameterSource()
+                .addValue("id", UUID.randomUUID()).addValue("account", account.id)
+                .addValue("date", Date.valueOf("2026-06-01")).addValue("balance", BigDecimal("1500")),
+        )
+        val company = accounts.save(AccountEntity(name = "Firma", bucket = "accounts"))
+        jdbc.update(
+            "insert into finance.account_snapshots (id, account_id, snapshot_date, balance) values (:id, :account, :date, :balance)",
+            MapSqlParameterSource()
+                .addValue("id", UUID.randomUUID()).addValue("account", company.id)
+                .addValue("date", Date.valueOf("2026-06-01")).addValue("balance", BigDecimal("300")),
+        )
+        insertGoal("First", 1, "1000", listOf(account.id))
+        insertGoal("Second", 2, "1000", listOf(account.id, company.id))
+        insertGoal("Manual", 3, "1000", emptyList(), "40")
+
+        val byName = repository.listGoalInputs().associateBy { it.name }
+
+        assertEquals(0, BigDecimal("1000").compareTo(byName.getValue("First").currentSaved))
+        assertEquals(0, BigDecimal("800").compareTo(byName.getValue("Second").currentSaved))
+        assertEquals(0, BigDecimal("40").compareTo(byName.getValue("Manual").currentSaved))
+    }
+
+    private fun insertGoal(name: String, priority: Int, target: String, accountIds: List<UUID>, saved: String = "0") {
+        val id = UUID.randomUUID()
+        jdbc.update(
+            """
+                insert into finance.goals (id, name, target_amount, priority, current_saved)
+                values (:id, :name, :target, :priority, :saved)
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("id", id).addValue("name", name).addValue("target", BigDecimal(target))
+                .addValue("priority", priority).addValue("saved", BigDecimal(saved)),
+        )
+        accountIds.forEach { accountId ->
+            jdbc.update(
+                "insert into finance.goal_accounts (goal_id, account_id) values (:goal, :account)",
+                MapSqlParameterSource().addValue("goal", id).addValue("account", accountId),
+            )
+        }
+    }
+
     private fun categoryId(name: String): Long =
         jdbc.query(
             "select id from finance.categories where name = :name",

@@ -1,3 +1,5 @@
+import { useSecurityState } from '../../hooks/useSecurityState'
+import { useResolvedGoals } from '../../hooks/useResolvedGoals'
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   Area,
@@ -14,7 +16,7 @@ import {
 import { CalendarClock, ListChecks, ReceiptText, type LucideIcon } from 'lucide-react'
 import { useStore } from '../../store'
 import { buildSchedule } from '../../domain/allocation'
-import { formatPLN, formatYearMonth } from '../../domain/formatting'
+import { formatCurrency, formatYearMonth } from '../../domain/formatting'
 import { buildSecurityBuffers } from '../../domain/securityBuffers'
 import {
   buildProjectionDashboardModel,
@@ -23,6 +25,8 @@ import {
   type ProjectionPerspective,
 } from '../../domain/projection'
 import type { Goal, Loan } from '../../domain/types'
+import { translate as t } from '../../i18n'
+import { useDefaultCurrency } from '../../hooks/useDefaultCurrency'
 
 const GOAL_COLORS = ['#4f46e5', '#0f766e', '#ca8a04', '#7c3aed', '#db2777', '#0891b2']
 const DEBT_COLORS = ['#dc2626', '#ea580c', '#b91c1c', '#c2410c']
@@ -33,12 +37,14 @@ type LayerKey = 'whatIf' | 'deadlines' | 'expenses'
 interface ChartPoint {
   label: string
   yearMonth: string
-  [key: string]: string | number
+  [key: string]: string | number | undefined
 }
 
 export function SavingsChart() {
   const settings = useStore(s => s.settings)
-  const goals = useStore(s => s.goals)
+  const currency = settings.defaultCurrency ?? 'PLN'
+  const goals = useResolvedGoals()
+  const securityState = useSecurityState()
   const loans = useStore(s => s.loans)
   const accounts = useStore(s => s.accounts)
   const snapshots = useStore(s => s.accountSnapshots)
@@ -50,7 +56,9 @@ export function SavingsChart() {
   const loanOverpayment = useStore(s => s.loanOverpayment)
   const goalInsights = useStore(s => s.goalInsights)
   const [perspective, setPerspective] = useState<ProjectionPerspective | undefined>()
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | undefined>()
+  const [selectedYear, setSelectedYear] = useState('')
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     whatIf: true,
     deadlines: true,
@@ -58,8 +66,8 @@ export function SavingsChart() {
   })
 
   const schedule = useMemo(
-    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses),
-    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses],
+    () => buildSchedule(settings, goals, loans, overrides, 0, 0, mortgagePlan, subscriptions, upcomingExpenses, securityState),
+    [settings, goals, loans, overrides, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
   const hasWhatIf = whatIfDelta !== 0 || loanOverpayment > 0
   const whatIfSchedule = useMemo(
@@ -73,12 +81,13 @@ export function SavingsChart() {
       mortgagePlan,
       subscriptions,
       upcomingExpenses,
+      securityState,
     ),
-    [settings, goals, loans, overrides, whatIfDelta, loanOverpayment, mortgagePlan, subscriptions, upcomingExpenses],
+    [settings, goals, loans, overrides, whatIfDelta, loanOverpayment, mortgagePlan, subscriptions, upcomingExpenses, securityState],
   )
   const model = useMemo(
     () => {
-      const security = buildSecurityBuffers(settings, accounts, snapshots, schedule)
+      const security = buildSecurityBuffers(settings, accounts, snapshots, schedule, upcomingExpenses)
       return buildProjectionDashboardModel({
         schedule,
         whatIfSchedule,
@@ -89,7 +98,7 @@ export function SavingsChart() {
         hasWhatIf,
       })
     },
-    [settings, accounts, snapshots, schedule, whatIfSchedule, goals, loans, goalInsights, hasWhatIf],
+    [settings, accounts, snapshots, schedule, whatIfSchedule, goals, loans, goalInsights, hasWhatIf, upcomingExpenses],
   )
 
   const knownIds = useMemo(() => new Set([...model.goals.map(goal => goal.id), ...model.debts.map(debt => debt.id)]), [model.goals, model.debts])
@@ -99,25 +108,28 @@ export function SavingsChart() {
   const visibleDebts = visibleDebtItems(model.debts, activePerspective, activeSelectedId)
   const visibleMonths = new Set(schedule.rows.map(row => row.yearMonth))
   const upcomingMarkers = upcomingExpenses
-    .filter(expense => !expense.isPaid && visibleMonths.has(expense.targetMonth))
+    .filter(expense => !expense.isPaid && !expense.recurring && visibleMonths.has(expense.targetMonth))
     .sort((a, b) => a.targetMonth.localeCompare(b.targetMonth))
   const data = useMemo(
-    () => buildChartPoints(schedule, whatIfSchedule, goals, loans, model.goals),
-    [schedule, whatIfSchedule, goals, loans, model.goals],
+    () => buildChartPoints(schedule, whatIfSchedule, goals, loans, model.goals, model.debts),
+    [schedule, whatIfSchedule, goals, loans, model.goals, model.debts],
   )
-  const tickInterval = Math.max(1, Math.floor(data.length / 10))
+  const years = useMemo(() => [...new Set(data.map(point => point.yearMonth.slice(0, 4)))], [data])
+  const activeYear = years.includes(selectedYear) ? selectedYear : ''
+  const visibleData = activeYear ? data.filter(point => point.yearMonth.startsWith(`${activeYear}-`)) : data
+  const tickInterval = Math.max(1, Math.floor(visibleData.length / 10))
 
   if (model.goals.length === 0 && loans.length === 0 && upcomingMarkers.length === 0) {
-    return <p className="py-8 text-center text-sm text-gray-400">Dodaj cele lub kredyty, żeby zobaczyć prognozę.</p>
+    return <p className="py-8 text-center text-sm text-gray-400">{t('projectionChart.empty')}</p>
   }
 
   return (
     <div className="space-y-4">
       {goalInsights && goalInsights.cycleCount > 0 && (
         <div className="grid gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm dark:border-gray-800 sm:grid-cols-3">
-          <Metric label="Tempo z historii" value={`${formatPLN(goalInsights.averageNetPerCycle)}/cykl`} tone={goalInsights.averageNetPerCycle < 0 ? 'negative' : 'positive'} />
-          <Metric label="Wolne po kosztach" value={`${formatPLN(goalInsights.averageFreeCashPerCycle)}/cykl`} />
-          <Metric label="Cykle historii" value={`${goalInsights.cycleCount} pełnych cykli`} />
+          <Metric label={t('goals.insights.historyPace')} value={t('projectionChart.perCycle', { amount: formatCurrency(goalInsights.averageNetPerCycle, currency) })} tone={goalInsights.averageNetPerCycle < 0 ? 'negative' : 'positive'} />
+          <Metric label={t('projectionChart.availableAfterCosts')} value={t('projectionChart.perCycle', { amount: formatCurrency(goalInsights.averageFreeCashPerCycle, currency) })} />
+          <Metric label={t('projectionChart.historyCycles')} value={t('projectionChart.fullCycles', { count: goalInsights.cycleCount })} />
         </div>
       )}
 
@@ -125,24 +137,59 @@ export function SavingsChart() {
         perspective={activePerspective}
         layers={layers}
         hasWhatIf={hasWhatIf}
+        years={years}
+        selectedYear={activeYear}
         onPerspectiveChange={setPerspective}
+        onYearChange={setSelectedYear}
         onLayerToggle={key => setLayers(current => ({ ...current, [key]: !current[key] }))}
       />
 
+      {hiddenKeys.size > 0 && (
+        <button
+          type="button"
+          onClick={() => setHiddenKeys(new Set())}
+          className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          {t('projectionChart.showAll')}
+        </button>
+      )}
+
       <div className="min-h-[340px]">
         <ResponsiveContainer width="100%" height={340}>
-          <ComposedChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+          <ComposedChart data={visibleData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={tickInterval - 1} className="fill-gray-500" />
             <YAxis tickFormatter={v => `${Math.round(Number(v) / 1000)}k`} tick={{ fontSize: 11 }} width={42} className="fill-gray-500" />
             <Tooltip
-              formatter={(value: unknown, name: unknown) => [formatPLN(value), tooltipName(String(name), goals, loans, model.goals)]}
+              formatter={(value: unknown, name: unknown, item: { payload?: ChartPoint }) => {
+                const key = String(name)
+                const index = data.findIndex(point => point.yearMonth === item.payload?.yearMonth)
+                const previous = index > 0 ? data[index - 1][key] : undefined
+                const delta = typeof value === 'number' && typeof previous === 'number' ? value - previous : undefined
+                const text = delta === undefined || delta === 0
+                  ? formatCurrency(value, currency)
+                  : `${formatCurrency(value, currency)} (${delta > 0 ? '+' : '−'}${formatCurrency(Math.abs(delta), currency)})`
+                return [text, tooltipName(key, goals, loans, model.goals)]
+              }}
               contentStyle={{ fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}
               labelFormatter={label => String(label ?? '')}
             />
             <Legend
-              formatter={(value: string) => tooltipName(value, goals, loans, model.goals)}
-              wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+              formatter={(value: string) => {
+                const label = tooltipName(value, goals, loans, model.goals)
+                return <span style={{ opacity: hiddenKeys.has(value.replace('wi_', '')) ? 0.4 : 1, textDecoration: hiddenKeys.has(value.replace('wi_', '')) ? 'line-through' : undefined }}>{label}</span>
+              }}
+              onClick={entry => {
+                const key = String(entry.dataKey ?? entry.value ?? '').replace('wi_', '')
+                if (!key) return
+                setHiddenKeys(current => {
+                  const next = new Set(current)
+                  if (next.has(key)) next.delete(key)
+                  else next.add(key)
+                  return next
+                })
+              }}
+              wrapperStyle={{ fontSize: 11, paddingTop: 8, cursor: 'pointer' }}
             />
 
             {visibleGoals.map((item, index) => {
@@ -153,6 +200,7 @@ export function SavingsChart() {
                   key={item.id}
                   type="monotone"
                   dataKey={`goal_${item.goalId}`}
+                  hide={hiddenKeys.has(`goal_${item.goalId}`)}
                   name={`goal_${item.goalId}`}
                   stroke={color}
                   fill={color}
@@ -173,6 +221,7 @@ export function SavingsChart() {
                   key={item.id}
                   type="monotone"
                   dataKey={`debt_${item.debtId}`}
+                  hide={hiddenKeys.has(`debt_${item.debtId}`)}
                   name={`debt_${item.debtId}`}
                   stroke={color}
                   strokeOpacity={selected ? 1 : 0.5}
@@ -188,6 +237,7 @@ export function SavingsChart() {
                 key={`wi-${item.id}`}
                 type="monotone"
                 dataKey={`wi_goal_${item.goalId}`}
+                hide={hiddenKeys.has(`goal_${item.goalId}`)}
                 name={`wi_goal_${item.goalId}`}
                 stroke={WHAT_IF_COLOR}
                 strokeDasharray="5 4"
@@ -201,6 +251,7 @@ export function SavingsChart() {
                 key={`wi-${item.id}`}
                 type="monotone"
                 dataKey={`wi_debt_${item.debtId}`}
+                hide={hiddenKeys.has(`debt_${item.debtId}`)}
                 name={`wi_debt_${item.debtId}`}
                 stroke={DEBT_COLORS[index % DEBT_COLORS.length]}
                 strokeDasharray="5 4"
@@ -232,7 +283,7 @@ export function SavingsChart() {
                 strokeDasharray="4 3"
                 strokeOpacity={0.6}
                 label={{
-                  value: `Spłata: ${shortLabel(item.name)}`,
+                  value: t('projectionChart.debtPayoffLabel', { name: shortLabel(item.name) }),
                   fontSize: 10,
                   fill: DEBT_COLORS[index % DEBT_COLORS.length],
                   position: index % 2 === 0 ? 'insideTopLeft' : 'insideTopRight',
@@ -267,16 +318,21 @@ function buildChartPoints(
   goals: Goal[],
   loans: Loan[],
   projectionGoals: ProjectionGoalItem[],
+  projectionDebts: ProjectionDebtItem[],
 ): ChartPoint[] {
   return schedule.rows.map((row, index) => {
     const point: ChartPoint = { label: row.label, yearMonth: row.yearMonth }
     goals.forEach(goal => {
-      point[`goal_${goal.id}`] = row.goalAllocations.find(allocation => allocation.goalId === goal.id)?.balanceAfter ?? 0
-      point[`wi_goal_${goal.id}`] = whatIfSchedule.rows[index]?.goalAllocations.find(allocation => allocation.goalId === goal.id)?.balanceAfter ?? 0
+      const end = goal.deadline?.slice(0, 7) ?? projectionGoals.find(item => item.goalId === goal.id)?.eta
+      const ended = end !== undefined && row.yearMonth > end
+      point[`goal_${goal.id}`] = ended ? undefined : row.goalAllocations.find(allocation => allocation.goalId === goal.id)?.balanceAfter ?? 0
+      point[`wi_goal_${goal.id}`] = ended ? undefined : whatIfSchedule.rows[index]?.goalAllocations.find(allocation => allocation.goalId === goal.id)?.balanceAfter ?? 0
     })
     loans.forEach(loan => {
-      point[`debt_${loan.id}`] = row.loanEntries.find(entry => entry.loanId === loan.id)?.balanceAfter ?? 0
-      point[`wi_debt_${loan.id}`] = whatIfSchedule.rows[index]?.loanEntries.find(entry => entry.loanId === loan.id)?.balanceAfter ?? 0
+      const payoff = projectionDebts.find(item => item.debtId === loan.id)?.eta
+      const ended = payoff !== undefined && row.yearMonth > payoff
+      point[`debt_${loan.id}`] = ended ? undefined : row.loanEntries.find(entry => entry.loanId === loan.id)?.balanceAfter ?? 0
+      point[`wi_debt_${loan.id}`] = ended ? undefined : whatIfSchedule.rows[index]?.loanEntries.find(entry => entry.loanId === loan.id)?.balanceAfter ?? 0
     })
     projectionGoals
       .filter(goal => goal.kind === 'security')
@@ -303,13 +359,13 @@ function visibleDebtItems(debts: ProjectionDebtItem[], perspective: ProjectionPe
 function tooltipName(key: string, goals: Goal[], loans: Loan[], projectionGoals: ProjectionGoalItem[]) {
   if (key.startsWith('wi_goal_')) {
     const id = key.replace('wi_goal_', '')
-    return `${projectionGoals.find(goal => goal.goalId === id)?.name ?? goals.find(goal => goal.id === id)?.name ?? key} (scenariusz)`
+    return `${projectionGoals.find(goal => goal.goalId === id)?.name ?? goals.find(goal => goal.id === id)?.name ?? key} ${t('projectionChart.scenario')}`
   }
   if (key.startsWith('goal_')) {
     const id = key.replace('goal_', '')
     return projectionGoals.find(goal => goal.goalId === id)?.name ?? goals.find(goal => goal.id === id)?.name ?? key
   }
-  if (key.startsWith('wi_debt_')) return `${loans.find(loan => loan.id === key.replace('wi_debt_', ''))?.name ?? key} (nadpłata)`
+  if (key.startsWith('wi_debt_')) return `${loans.find(loan => loan.id === key.replace('wi_debt_', ''))?.name ?? key} ${t('loans.chart.scenarioSuffix')}`
   if (key.startsWith('debt_')) return loans.find(loan => loan.id === key.replace('debt_', ''))?.name ?? key
   return key
 }
@@ -322,22 +378,28 @@ function ProjectionToolbar({
   perspective,
   layers,
   hasWhatIf,
+  years,
+  selectedYear,
   onPerspectiveChange,
+  onYearChange,
   onLayerToggle,
 }: {
   perspective: ProjectionPerspective
   layers: Record<LayerKey, boolean>
   hasWhatIf: boolean
+  years: string[]
+  selectedYear: string
   onPerspectiveChange: (perspective: ProjectionPerspective) => void
+  onYearChange: (year: string) => void
   onLayerToggle: (key: LayerKey) => void
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="inline-flex rounded-md border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-900">
         {[
-          ['goals', 'Cele'],
-          ['debts', 'Długi'],
-          ['all', 'Wszystko'],
+          ['goals', t('common.labels.goals')],
+          ['debts', t('common.labels.debt')],
+          ['all', t('projectionChart.all')],
         ].map(([value, label]) => (
           <button
             key={value}
@@ -354,10 +416,23 @@ function ProjectionToolbar({
         ))}
       </div>
 
+      <label className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+        <span>{t('projectionChart.yearFilter')}</span>
+        <select
+          value={selectedYear}
+          onChange={event => onYearChange(event.target.value)}
+          aria-label={t('projectionChart.yearFilterAriaLabel')}
+          className="rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+        >
+          <option value="">{t('projectionChart.allYears')}</option>
+          {years.map(year => <option key={year} value={year}>{year}</option>)}
+        </select>
+      </label>
+
       <div className="flex flex-wrap gap-2">
-        <LayerButton active={layers.whatIf && hasWhatIf} disabled={!hasWhatIf} label="Scenariusz" onClick={() => onLayerToggle('whatIf')} />
-        <LayerButton active={layers.deadlines} label="Terminy" onClick={() => onLayerToggle('deadlines')} />
-        <LayerButton active={layers.expenses} label="Wydatki" onClick={() => onLayerToggle('expenses')} />
+        <LayerButton active={layers.whatIf && hasWhatIf} disabled={!hasWhatIf} label={t('projectionChart.scenarioLayer')} onClick={() => onLayerToggle('whatIf')} />
+        <LayerButton active={layers.deadlines} label={t('projectionChart.deadlinesLayer')} onClick={() => onLayerToggle('deadlines')} />
+        <LayerButton active={layers.expenses} label={t('projectionChart.expensesLayer')} onClick={() => onLayerToggle('expenses')} />
       </div>
     </div>
   )
@@ -382,10 +457,11 @@ function LayerButton({ active, disabled = false, label, onClick }: { active: boo
 }
 
 function ProjectionGoalList({ goals, selectedId, onSelect }: { goals: ProjectionGoalItem[]; selectedId?: string; onSelect: (id: string) => void }) {
+  const currency = useDefaultCurrency()
   return (
-    <ProjectionListShell title="Najbliższe cele" icon={ListChecks}>
+    <ProjectionListShell title={t('projectionChart.nearestGoals')} icon={ListChecks}>
       {goals.length === 0 ? (
-        <EmptyState text="Brak aktywnych celów." />
+        <EmptyState text={t('projectionChart.noActiveGoals')} />
       ) : goals.slice(0, 6).map(goal => (
         <ProjectionRow key={goal.id} active={goal.id === selectedId} priority={goal.kind === 'security'} onClick={() => onSelect(goal.id)}>
           <div className="min-w-0">
@@ -393,26 +469,26 @@ function ProjectionGoalList({ goals, selectedId, onSelect }: { goals: Projection
               <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">{goal.name}</p>
               {goal.kind === 'security' && (
                 <span className="shrink-0 rounded-sm bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                  Priorytet 1
+                  {t('projectionChart.priorityBadge')}
                 </span>
               )}
             </div>
             <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-              {formatPLN(goal.current)} / {formatPLN(goal.target)} · brakuje {formatPLN(goal.remaining)}
+              {t('projectionChart.goalRemaining', { current: formatCurrency(goal.current, currency), target: formatCurrency(goal.target, currency), remaining: formatCurrency(goal.remaining, currency) })}
             </p>
             {goal.kind === 'security' && goal.focusCopy && (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{goal.focusCopy}</p>
             )}
           </div>
           <div className="text-right text-xs">
-            <p className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{goal.eta ? formatYearMonth(goal.eta) : 'brak ETA'}</p>
+            <p className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{goal.eta ? formatYearMonth(goal.eta) : t('projectionChart.etaMissing')}</p>
             <p className={goal.kind === 'security' || goal.status === 'behind_plan' || goal.status === 'unreachable' ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 dark:text-gray-400'}>
               {goal.kind === 'security'
-                ? goal.plannedPerCycle ? `${formatPLN(goal.plannedPerCycle)}/mies. wolne` : 'brak wolnych środków'
-                : goal.actualPerCycle !== undefined ? `${formatPLN(goal.actualPerCycle)}/cykl` : 'brak historii'}
+                ? goal.plannedPerCycle ? t('projectionChart.monthlyFree', { amount: formatCurrency(goal.plannedPerCycle, currency) }) : t('projectionChart.noFreeCash')
+                : goal.actualPerCycle !== undefined ? t('projectionChart.perCycle', { amount: formatCurrency(goal.actualPerCycle, currency) }) : t('goals.insights.noHistory')}
             </p>
             {goal.whatIfEtaDeltaMonths !== undefined && goal.whatIfEtaDeltaMonths !== 0 && (
-              <p className="text-emerald-600 dark:text-emerald-400">what-if {goal.whatIfEtaDeltaMonths > 0 ? '+' : ''}{goal.whatIfEtaDeltaMonths} mies.</p>
+              <p className="text-emerald-600 dark:text-emerald-400">{t('projectionChart.whatIfDelta', { delta: `${goal.whatIfEtaDeltaMonths > 0 ? '+' : ''}${goal.whatIfEtaDeltaMonths}` })}</p>
             )}
           </div>
         </ProjectionRow>
@@ -422,21 +498,22 @@ function ProjectionGoalList({ goals, selectedId, onSelect }: { goals: Projection
 }
 
 function ProjectionDebtList({ debts, selectedId, onSelect }: { debts: ProjectionDebtItem[]; selectedId?: string; onSelect: (id: string) => void }) {
+  const currency = useDefaultCurrency()
   return (
-    <ProjectionListShell title="Najbliższe spłaty" icon={ReceiptText}>
+    <ProjectionListShell title={t('projectionChart.nearestPayoffs')} icon={ReceiptText}>
       {debts.length === 0 ? (
-        <EmptyState text="Brak aktywnych rat." />
+        <EmptyState text={t('projectionChart.noActiveDebt')} />
       ) : debts.slice(0, 6).map(debt => (
         <ProjectionRow key={debt.id} active={debt.id === selectedId} onClick={() => onSelect(debt.id)}>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">{debt.name}</p>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Saldo {formatPLN(debt.balance)}</p>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{t('projectionChart.debtBalance', { amount: formatCurrency(debt.balance, currency) })}</p>
           </div>
           <div className="text-right text-xs">
-            <p className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{debt.eta ? formatYearMonth(debt.eta) : 'brak ETA'}</p>
-            <p className="text-gray-500 dark:text-gray-400">{formatPLN(debt.monthlyPayment)}/mies.</p>
+            <p className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{debt.eta ? formatYearMonth(debt.eta) : t('projectionChart.etaMissing')}</p>
+            <p className="text-gray-500 dark:text-gray-400">{t('projectionChart.monthlyPayment', { amount: formatCurrency(debt.monthlyPayment, currency) })}</p>
             {debt.whatIfPayoffDeltaMonths !== undefined && debt.whatIfPayoffDeltaMonths > 0 && (
-              <p className="text-emerald-600 dark:text-emerald-400">nadpłata -{debt.whatIfPayoffDeltaMonths} mies.</p>
+              <p className="text-emerald-600 dark:text-emerald-400">{t('projectionChart.overpaymentDelta', { months: debt.whatIfPayoffDeltaMonths })}</p>
             )}
           </div>
         </ProjectionRow>
